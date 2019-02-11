@@ -1,0 +1,27 @@
+{
+  "name": "jradio",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "dev": "nodemon server/index.js",
+    "build": "next build",
+    "start": "next start"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@material-ui/core": "^3.9.2",
+    "@material-ui/icons": "^3.0.2",
+    "audio-mixer": "^2.1.1",
+    "express": "^4.16.4",
+    "jss": "^9.8.7",
+    "next": "^7.0.3",
+    "prop-types": "^15.7.0",
+    "react": "^16.8.1",
+    "react-dom": "^16.8.1",
+    "react-jss": "^8.6.1",
+    "socket.io": "^2.2.0",
+    "ytdl-core": "^0.29.1"
+  }
+}
