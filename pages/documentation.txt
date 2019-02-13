@@ -1,0 +1,42 @@
+/*
+
+    
+    constructor 
+
+        state: {
+            rooms?
+
+            token: 'jwt',
+            song: 'id: 0, time: 0, duration: 0, type: 'audio/mp3',
+            //status: 'lobby',
+            interacted: false
+        }
+
+
+    componentDidMount
+
+        initialize web socket connection to server
+
+            onSong
+
+                set state.token
+
+                set song to decoded jwt.song
+
+                set audio player to new src - /stream?token=state.token
+                set audio player time to token.song.time            
+
+
+    render
+
+
+            if not interacted
+
+                prompt user to press tune in modal dialog button to start the audio player at synchronized time
+
+            else
+
+                render audio player and song info
+
+
+*/

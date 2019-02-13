@@ -1,0 +1,75 @@
+/*
+
+    SERVER FUNCTIONALITY
+
+        on socket connect
+            generate jwt of user ip address and current song id
+            send jwt to user
+
+        on song add (link)
+            validate link
+            add song to queue {id, link, streams[], downloaded}
+
+            start downloading song to fs
+                on finish - mark song as downloaded
+                
+            if (queueElapsed < song.duration / 2)
+
+                option 1: start a ytdl stream (song.masterStream) and pipe to song pass through streams array
+
+                    run a getInfo and set content-length, type, etc params of the song for range requests
+
+                    note: may have to initialize the streams array by user count, may be able to just dynamically add streams on when requests come in and pipe to those?
+
+            if (!currentSong) 
+
+                set current song
+                start intervals and recursive loop
+
+                on song end
+
+                    check for next song
+                    emit next song to all users and new jwts (ip address and current song id)
+
+
+        on stream request(jwt)
+
+            if (valid jwt)
+
+                if (jwt ip matches req ip)
+                
+                    if (jwt song id matches current song)
+
+                        if (currentSong is downloaded)
+
+                            if (req.range)
+
+                                get readStream from fs at range and pipe to res
+
+                            else
+                            
+                                get readStream from fs and pipe to res
+
+                        else
+
+                            add new stream to currentSong pass through streams array
+
+                            manually pipe master stream to this pass through to fill in already loaded data?
+                            
+                            if (req.range)
+
+                                start piping range of pass through stream to res
+
+                            else
+
+                                pipe pass through stream to res
+
+
+
+
+
+        func queueElapsed
+
+            return the total elapsed time of the songs in the queue
+
+*/

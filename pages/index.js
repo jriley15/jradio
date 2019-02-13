@@ -5,7 +5,7 @@ import NavBar from './components/NavBar';
 import Grid from '@material-ui/core/Grid';
 import Button from '@material-ui/core/Button';
 import ytdl from 'ytdl-core';
-
+import jwt_decode from 'jwt-decode';
 
 const styles = theme => ({
     root: {
@@ -31,7 +31,8 @@ class index extends Component {
         this.state = {
 
 
-            currentSong: null
+            currentSong: null,
+            token: null
 
         }
     }
@@ -40,10 +41,12 @@ class index extends Component {
 
         this.socket = io();
         
-        this.socket.on('song', (song) => {
+        this.socket.on('song', (token) => {
 
-            console.log(song);
-            this.setState({currentSong: song});
+
+            this.setState({token: jwt_decode(token)});
+            console.log(this.state.token);
+
             //var player =  document.getElementById("player");
             //document.getElementById("source").src = "/stream?link="+song.link;
             //player.load();
@@ -56,19 +59,19 @@ class index extends Component {
 
         const { currentSong } = this.state;
 
-        if (currentSong) {
+        //if (currentSong) {
 
             var player =  document.getElementById("player");
-            document.getElementById("source").src = "/stream?link="+currentSong.link;
+            document.getElementById("source").src = "/stream";
             player.load();
-            //player.currentTime = currentSong.time;
+            player.currentTime = this.state.token.time;
             player.play();
             /*var player =  document.getElementById("player");
             document.getElementById("source").src = "/stream?link="+currentSong.link;
             player.load();
             player.currentTime = currentSong.time;
             player.play();*/
-        }
+        //}
     }
 
 
