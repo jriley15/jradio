@@ -12,6 +12,10 @@ const io = require('socket.io')(server);
 const fs = require('fs');
 const stream = require('stream');
 var jwt = require('jsonwebtoken');
+const ffmpegInstaller = require('@ffmpeg-installer/ffmpeg');
+const Ffmpeg = require('fluent-ffmpeg')
+
+Ffmpeg.setFfmpegPath(ffmpegInstaller.path);
 
 // queue of songs
 var queue = [];
@@ -22,13 +26,26 @@ var songInterval = null;
 
 //song = {id, duration, elapsed, size, title, streams, masterStream, downloaded}
 
+
 nextApp.prepare().then(() => {
 
-    app.get('/test', function (req, res) {
+    app.get('/test', async function (req, res) {
 
-        getStream();
 
-        res.send(true);
+        //mixer.pipe(res);
+        ytdl('https://www.youtube.com/watch?v=KvRVky0r7YM',  {filter: (format) => format.itag === '140'
+    
+        }).on('response', function(response) { 
+      
+            let size = parseInt(response.headers['content-length'], 10);
+
+            res.writeHead(200, {            
+                'Content-Type': 'audio/mp4',
+                'Content-Length': size,
+            });
+            
+        }).pipe(res);
+
 
     });
 
@@ -50,12 +67,19 @@ nextApp.prepare().then(() => {
             ytdl.getInfo(link, (err, info) => {
 
                 if (err) throw err;
-                let format = ytdl.chooseFormat(info.formats, { quality: '140' }); //mp3, may have to write something to choose available audio if 140 isn't present
+                let format = ytdl.chooseFormat(info.formats, {filter: 'audioonly', quality: 'highest'}); 
+                
+                //console.log(format);
+
+                //mp3, may have to write something to choose available audio if 140 isn't present
                 //let audioFormats = ytdl.filterFormats(info.formats, 'audioonly');
                 //console.log(audioFormats);
 
                 //queue.push({link: link, duration: info.length_seconds, time: 0});
                 //console.log(format);
+                //let audioFormats = ytdl.filterFormats(info.formats, 'audioonly');
+                //console.log(audioFormats);
+
                 addToQueue(info);
                 //res.send(info);
         
@@ -72,6 +96,7 @@ nextApp.prepare().then(() => {
 
 
     });
+
 
 
     app.get('/stream', function (req, res) {
@@ -94,72 +119,56 @@ nextApp.prepare().then(() => {
 
             if (req.headers.range) {
                 
-                let parts = req.headers.range.replace(/bytes=/, "").split("-");
-                let partialstart = parts[0];
-                let partialend = parts[1] || false;
-                let start = parseInt(partialstart, 10);
-                let totalSize = currentSong.size;
+                var range = req.headers.range;
+                var positions = range.replace(/bytes=/, '').split('-');
+                var start = parseInt(positions[0], 10);
+                let total = parseInt(currentSong.size, 10); 
 
-                console.log('range request: ',start, ' - ',partialend, ' | ',currentSong.size);
+                var end = positions[1] ? parseInt(positions[1], 10) : total - 1;
+                var chunkSize = (end - start) + 1;
 
-                //range requested, only push chunks in range to stream
+                console.log('range request: ',start, ' - ',end, ' | ',currentSong.size);
 
-                let rangeIndex = 0;
 
-                //find range to start data copy
-                for (let i = 0, dataSize = 0; i < currentSong.data.length; i++) {
+                let buffer = Buffer.concat(currentSong.data);
 
-                    dataSize += currentSong.data[i].length;
+                if (start <= buffer.length) {
 
-                    if (dataSize > start) {
+                    buffer = buffer.slice(start, end);
+                } 
 
-                        if (i > 0)
-                            rangeIndex = i-1;
+                console.log('pushing ',buffer.length,' bytes onto pass through');
 
-                        console.log('found index: ', rangeIndex ,' / ',currentSong.data.length);
-                        
-                        break;
+                let splitSize = 16335;
+
+                while (buffer.length > 0) {
+
+                    if (buffer.length < splitSize) {
+                        splitSize = buffer.length;
                     }
 
+                    let chunk = buffer.slice(0, splitSize);
+                    newStream.passThrough.push(chunk);
+                    buffer = buffer.slice(splitSize);
+
                 }
 
-                //copy chunks from data to stream
-                for (let i = rangeIndex; i < currentSong.data.length; i++) {
-                    //console.log('added range: ',i);
-                    newStream.passThrough.push(currentSong.data[i]);
-                }
-
-                //Temporary fix for wrong content-length
-                if(start != 0) {
-                  
-                    totalSize += start;
-                }
-                let end = partialend ? parseInt(partialend, 10) : totalSize - 1;
-                let chunksize = (end - start) + 1;
-      
-                if(start <= totalSize) {
-            
-                    res.writeHead(206, {            
-                        'Content-Range': 'bytes ' + start + '-' + end + '/' + totalSize,
-                        'Accept-Ranges': 'bytes',
-                        'Content-Length': chunksize,
-                        'Content-Type': currentSong.type,
-                        'Cache-Control': 'no-cache'
-                    });
-
-                } else {
-                    
-                    res.writeHead(416, {});
-                }
-                let dataread2 = 0;
+                res.writeHead(206, {            
+                    'Content-Range': 'bytes ' + start + '-' + end + '/' + total,
+                    'Accept-Ranges': 'bytes',
+                    'Content-Length': chunkSize,
+                    'Content-Type': 'audio/mpeg'
+                });
 
                 newStream.passThrough.pipe(res).on('close', function() {
 
-                    var index = currentSong.streams.indexOf(newStream);
+                    if (currentSong) {
+                        var index = currentSong.streams.indexOf(newStream);
 
-                    currentSong.streams.splice(index, 1);
+                        currentSong.streams.splice(index, 1);
 
-                    console.log('current streams: ',currentSong.streams.length);
+                        console.log('current streams: ',currentSong.streams.length);
+                    }
                 });
 
 
@@ -174,7 +183,7 @@ nextApp.prepare().then(() => {
 
                 res.writeHead(200, {            
                     'Accept-Ranges': 'bytes',
-                    'Content-Type': currentSong.type,
+                    'Content-Type': 'audio/mpeg',//currentSong.type,
                     'Content-Length': currentSong.size,
                     'Cache-Control': 'no-cache'
                 });
@@ -195,63 +204,6 @@ nextApp.prepare().then(() => {
             res.send(false);
         }
 
-
-
-
-        /*let link = req.query.link;
-        
-        if (req.headers.range) {
-    
-            let parts = req.headers.range.replace(/bytes=/, "").split("-");
-            let partialstart = parts[0];
-            let partialend = parts[1] || false;
-            let start = parseInt(partialstart, 10);
-    
-            ytdl(link, {filter: (format) => format.itag === '140', range: {start: partialstart} 
-    
-            }).on('response', function(response) {
-    
-                let totalSize = parseInt(response.headers['content-length'], 10);
-                let type = response.headers['content-type'];
-    
-                //Temporary fix for wrong content-length
-                if(start != 0) {
-                  
-                  totalSize += start;
-                }
-                let end = partialend ? parseInt(partialend, 10) : totalSize - 1;
-                let chunksize = (end - start) + 1;
-    
-                if(start <= totalSize) {
-              
-                    res.writeHead(206, {            
-                      'Content-Range': 'bytes ' + start + '-' + end + '/' + totalSize,
-                      'Accept-Ranges': 'bytes',
-                      'Content-Length': chunksize,
-                      'Content-Type': type
-                    });
-                  } else {
-                    
-                    res.writeHead(416, {});
-                  }
-    
-            }).pipe(res);
-    
-        } else {
-            ytdl(link, {filter: (format) => format.itag === '140'})
-            
-            .on('response', function(response) {
-    
-                let size = response.headers['content-length'];
-                let type = response.headers['content-type'];
-                res.writeHead(200, {
-                    "Accept-Ranges": "bytes", 
-                    'Content-Type': type,
-                    'Content-Length': size
-                });
-    
-            }).pipe(res);      
-        }*/
     });
 
     app.get('*', (req, res) => {
@@ -289,31 +241,38 @@ function addToQueue(info) {
     //id, duration, elapsed, size, title, streams, masterStream, downloaded}
 
     let masterStream = new stream.PassThrough();
+    
 
     let link = 'https://www.youtube.com/watch?v='+info.video_id;
 
-    ytdl(link, {filter: (format) => format.itag === '140'
-
-    }).on('response', function(response) { 
+    const audio = ytdl(link, {filter: 'audioonly', quality: 'highest'}).on('response', function(response) { 
       
         let size = parseInt(response.headers['content-length'], 10);
         let type = response.headers['content-type'];
 
-        //console.log(response.headers);
+        console.log('format: ', type,' - size: ',size, ' duration: ',info.length_seconds);
+
+        let seconds = parseInt(info.length_seconds, 10);
+        let convertedSize = ((seconds * 160) / 8) * 1000;
+        
+        console.log('calculated size: ', convertedSize);
+
+
         let song = {
 
             id: songIndex,
             videoId: info.video_id,
             duration: info.length_seconds,
             elapsed: 0,
-            size: size,
+            size: convertedSize,
             type: type,
             title: info.title,
             streamIndex: 0,
             streams: [],
             masterStream: masterStream,
             data: [],
-            downloaded: false
+            downloaded: false,
+            rawData: []
 
         }
 
@@ -328,6 +287,7 @@ function addToQueue(info) {
         masterStream.on('finish', function() {
 
             song.downloaded = true;
+            console.log('total size: ',dataRead);
 
         });
 
@@ -338,28 +298,34 @@ function addToQueue(info) {
         var dataRead = 0;
         masterStream.on('data', function(data) {
             dataRead += data.length;
+            
             console.log('downloaded: ', ((dataRead / song.size) * 100).toFixed(2) + '% ');
             //console.log('recieved');
             //console.log('master stream receiving data');
 
 
-
             song.data.push(data);
+            
+            //console.log('data: ', data[0]);
             
             song.streams.forEach(function(s) {
 
                 s.passThrough.push(data);
+                //console.log('pushing data to stream: ',dataRead);
 
             });
 
 
         });
-
-
         //}    
 
         
-    }).pipe(masterStream);
+    });
+
+    const ffmpeg = new Ffmpeg(audio);
+
+    ffmpeg.format('mp3').withAudioBitrate(160).pipe(masterStream);
+
 
     //masterStream.pipe(fs.createWriteStream('./files/'+songIndex));
 
@@ -387,24 +353,16 @@ function nextSong() {
 
         currentSong = song;
 
-        /*this.stream = ytdl(currentSong.link, {filter: (format) => format.itag === '140'});
+        let sockets = io.clients().sockets;
 
-        this.passThrough = new stream.PassThrough();
-        
-        this.stream.pipe(this.passThrough);
+        for (let socketId in sockets) {
 
-        for (let i = 0; i < 10; i++) {
-            let passThrough = new stream.PassThrough();
-            streams.push({passThrough: passThrough, taken: false});
+            let socket = sockets[socketId]; 
+            var address = socket.handshake.address;
+            let token = jwt.sign({id: currentSong.id, ip: address.address, time: currentSong.elapsed}, secret);
+            socket.emit('song', token);
+
         }
-
-        this.passThrough.on('data', function(data) {
-            
-            for (let i = 0; i < 10; i++) {
-                streams[i].passThrough.push(data);
-            }
-
-        });*/
 
         progressInterval = setInterval(() => {
 

@@ -28,6 +28,7 @@
 
                 on song end
 
+                    delete song from fs
                     check for next song
                     emit next song to all users and new jwts (ip address and current song id)
 
