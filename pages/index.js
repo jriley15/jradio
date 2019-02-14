@@ -125,7 +125,7 @@ class index extends Component {
                     </Grid>
 
                     <audio controls id="player" preload="automatic">
-                        <source id="source" src="/stream" type="audio/mpeg" />
+                        <source id="source" src="/stream" type="audio/mp3" />
                         Your browser does not support the audio element.
                     </audio>
                     {this.state.types}

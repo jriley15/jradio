@@ -124,8 +124,8 @@ nextApp.prepare().then(() => {
                 var start = parseInt(positions[0], 10);
                 let total = parseInt(currentSong.size, 10); 
 
-                var end = positions[1] ? parseInt(positions[1], 10) : total - 1;
-                var chunkSize = (end - start) + 1;
+                var end = positions[1] ? parseInt(positions[1], 10) + 1 : total - 1;
+                var chunkSize = (end - start);
 
                 console.log('range request: ',start, ' - ',end, ' | ',currentSong.size);
 
@@ -139,7 +139,7 @@ nextApp.prepare().then(() => {
 
                 console.log('pushing ',buffer.length,' bytes onto pass through');
 
-                let splitSize = 16335;
+                let splitSize = 16385;
 
                 while (buffer.length > 0) {
 
@@ -148,6 +148,7 @@ nextApp.prepare().then(() => {
                     }
 
                     let chunk = buffer.slice(0, splitSize);
+
                     newStream.passThrough.push(chunk);
                     buffer = buffer.slice(splitSize);
 
@@ -157,9 +158,13 @@ nextApp.prepare().then(() => {
                     'Content-Range': 'bytes ' + start + '-' + end + '/' + total,
                     'Accept-Ranges': 'bytes',
                     'Content-Length': chunkSize,
-                    'Content-Type': 'audio/mpeg'
+                    'Content-Type': 'audio/mp3'
                 });
-
+                newStream.passThrough.on('data', function(data) {
+                   
+                    //console.log('sending: ',data.length,' bytes to browser');
+                    
+                });
                 newStream.passThrough.pipe(res).on('close', function() {
 
                     if (currentSong) {
@@ -181,9 +186,9 @@ nextApp.prepare().then(() => {
     
                 });
 
-                res.writeHead(200, {            
+                res.writeHead(200, {          
                     'Accept-Ranges': 'bytes',
-                    'Content-Type': 'audio/mpeg',//currentSong.type,
+                    'Content-Type': 'audio/mp3',//currentSong.type,
                     'Content-Length': currentSong.size,
                     'Cache-Control': 'no-cache'
                 });
@@ -299,7 +304,7 @@ function addToQueue(info) {
         masterStream.on('data', function(data) {
             dataRead += data.length;
             
-            console.log('downloaded: ', ((dataRead / song.size) * 100).toFixed(2) + '% ');
+            //console.log('downloaded: ', ((dataRead / song.size) * 100).toFixed(2) + '% ');
             //console.log('recieved');
             //console.log('master stream receiving data');
 
