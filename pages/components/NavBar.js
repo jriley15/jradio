@@ -31,9 +31,9 @@ const styles = {
             <AppBar position="static" color="primary">
             <Toolbar>
                 <Typography variant="h6" color="inherit" className={classes.grow}>
-                J Radio
+                  J Radio
                 </Typography>
-                <Button color="inherit">Login</Button>
+                <Button color="inherit">Add Song</Button>
             </Toolbar>
             </AppBar>
         </div>

@@ -13,9 +13,11 @@ const fs = require('fs');
 const stream = require('stream');
 var jwt = require('jsonwebtoken');
 const ffmpegInstaller = require('@ffmpeg-installer/ffmpeg');
-const Ffmpeg = require('fluent-ffmpeg')
+const Ffmpeg = require('fluent-ffmpeg');
+
 
 Ffmpeg.setFfmpegPath(ffmpegInstaller.path);
+
 
 // queue of songs
 var queue = [];
@@ -24,28 +26,22 @@ var currentSong = null;
 var progressInterval = null;
 var songInterval = null;
 
-//song = {id, duration, elapsed, size, title, streams, masterStream, downloaded}
+
+
+
 
 
 nextApp.prepare().then(() => {
 
+
+
     app.get('/test', async function (req, res) {
 
 
-        //mixer.pipe(res);
-        ytdl('https://www.youtube.com/watch?v=KvRVky0r7YM',  {filter: (format) => format.itag === '140'
-    
-        }).on('response', function(response) { 
-      
-            let size = parseInt(response.headers['content-length'], 10);
+        //mixer.pipe(encoder).pipe(res);
 
-            res.writeHead(200, {            
-                'Content-Type': 'audio/mp4',
-                'Content-Length': size,
-            });
-            
-        }).pipe(res);
-
+        //youtube('https://www.youtube.com/watch?v=ZMtHl75DopY').pipe(res);
+        
 
     });
 
@@ -61,29 +57,14 @@ nextApp.prepare().then(() => {
 
         let link = req.query.link;
 
-    
         if (link) {
 
             ytdl.getInfo(link, (err, info) => {
 
-                if (err) throw err;
-                let format = ytdl.chooseFormat(info.formats, {filter: 'audioonly', quality: 'highest'}); 
-                
+                //let format = ytdl.chooseFormat(info.formats, {filter: 'audioonly', quality: 'highest'}); 
                 //console.log(format);
-
-                //mp3, may have to write something to choose available audio if 140 isn't present
-                //let audioFormats = ytdl.filterFormats(info.formats, 'audioonly');
-                //console.log(audioFormats);
-
-                //queue.push({link: link, duration: info.length_seconds, time: 0});
-                //console.log(format);
-                //let audioFormats = ytdl.filterFormats(info.formats, 'audioonly');
-                //console.log(audioFormats);
-
                 addToQueue(info);
-                //res.send(info);
-        
-            
+
             });
 
             res.send(true);
@@ -91,10 +72,6 @@ nextApp.prepare().then(() => {
     
             res.send(false);
         }
-        //ytdl(link, {filter: (format) => format.itag === '140'}).pipe(fs.createWriteStream('./files/idk.mp4'));
-
-
-
     });
 
 
@@ -156,9 +133,13 @@ nextApp.prepare().then(() => {
 
                 res.writeHead(206, {            
                     'Content-Range': 'bytes ' + start + '-' + end + '/' + total,
+                    'Cache-Control': 'no-cache, no-store, must-revalidate', 
+                    'Pragma': 'no-cache', 
+                    'Expires': 0,
+                    'Connection' : 'keep-alive',
                     'Accept-Ranges': 'bytes',
                     'Content-Length': chunkSize,
-                    'Content-Type': 'audio/mp3'
+                    'Content-Type': 'audio/mpeg'
                 });
                 newStream.passThrough.on('data', function(data) {
                    
@@ -188,9 +169,12 @@ nextApp.prepare().then(() => {
 
                 res.writeHead(200, {          
                     'Accept-Ranges': 'bytes',
-                    'Content-Type': 'audio/mp3',//currentSong.type,
+                    'Content-Type': 'audio/mpeg',//currentSong.type,
                     'Content-Length': currentSong.size,
-                    'Cache-Control': 'no-cache'
+                    'Connection' : 'keep-alive',
+                    'Cache-Control': 'no-cache, no-store, must-revalidate', 
+                    'Pragma': 'no-cache', 
+                    'Expires': 0,
                 });
 
 
@@ -203,7 +187,6 @@ nextApp.prepare().then(() => {
                     console.log('current streams: ',currentSong.streams.length);
                 });
             }
-
 
         } else {
             res.send(false);
@@ -345,7 +328,7 @@ const secret = 'jradiosecret';
 function sendSong(socket) {
 
     var address = socket.handshake.address;
-    let token = jwt.sign({id: currentSong.id, ip: address.address, time: currentSong.elapsed}, secret);
+    let token = jwt.sign({id: currentSong.id, ip: address.address, time: currentSong.elapsed, duration: currentSong.duration}, secret);
 
     socket.emit('song', token);
 }
@@ -364,7 +347,7 @@ function nextSong() {
 
             let socket = sockets[socketId]; 
             var address = socket.handshake.address;
-            let token = jwt.sign({id: currentSong.id, ip: address.address, time: currentSong.elapsed}, secret);
+            let token = jwt.sign({id: currentSong.id, ip: address.address, time: currentSong.elapsed, duration: currentSong.duration}, secret);
             socket.emit('song', token);
 
         }
