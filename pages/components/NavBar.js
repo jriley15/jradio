@@ -3,22 +3,20 @@ import AppBar from '@material-ui/core/AppBar';
 import Toolbar from '@material-ui/core/Toolbar';
 import Typography from '@material-ui/core/Typography';
 import Button from '@material-ui/core/Button';
-import IconButton from '@material-ui/core/IconButton';
-import MenuIcon from '@material-ui/icons/Menu';
 import { withStyles } from '@material-ui/core/styles';
 
-const styles = {
+const styles = theme => ({
     root: {
       flexGrow: 1,
     },
     grow: {
       flexGrow: 1,
     },
-    menuButton: {
-      marginLeft: -12,
-      marginRight: 20,
+    icon: {
+      marginLeft: theme.spacing.unit,
     },
-  };
+  
+  });
 
   
 
@@ -29,12 +27,15 @@ const styles = {
     return (
         <div className={classes.root}>
             <AppBar position="static" color="primary">
-            <Toolbar>
-                <Typography variant="h6" color="inherit" className={classes.grow}>
-                  J Radio
-                </Typography>
-                <Button color="inherit">Add Song</Button>
-            </Toolbar>
+              <Toolbar>
+                  <Typography variant="h6" color="inherit" className={classes.grow}>
+                    J Radio
+                  </Typography>
+                  <Button variant="contained" color="secondary">
+                    Add Song
+                  </Button>
+
+              </Toolbar>
             </AppBar>
         </div>
     )

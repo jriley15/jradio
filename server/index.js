@@ -9,48 +9,65 @@ const PORT = process.env.PORT || 3000;
 const handle = nextApp.getRequestHandler();
 const server = require('http').Server(app);
 const io = require('socket.io')(server);
-const fs = require('fs');
 const stream = require('stream');
 var jwt = require('jsonwebtoken');
 const ffmpegInstaller = require('@ffmpeg-installer/ffmpeg');
 const Ffmpeg = require('fluent-ffmpeg');
-
-
 Ffmpeg.setFfmpegPath(ffmpegInstaller.path);
+const Throttle = require('stream-throttle').Throttle;
 
+//TESTING
+/*
+ytdl.getInfo('https://www.youtube.com/watch?v=6-hRrKFkAQE', (err, info) => {
+
+    addToQueue(info);
+
+});
+*/
 
 // queue of songs
 var queue = [];
-
 var currentSong = null;
-var progressInterval = null;
-var songInterval = null;
 
+var streams = [];
+var masterStream = new stream.PassThrough();
+var streamIndex = 0;
 
+masterStream.on('data', function(data) {
 
+    streams.forEach(function(s) {
 
-
-
-nextApp.prepare().then(() => {
-
-
-
-    app.get('/test', async function (req, res) {
-
-
-        //mixer.pipe(encoder).pipe(res);
-
-        //youtube('https://www.youtube.com/watch?v=ZMtHl75DopY').pipe(res);
-        
+        s.passThrough.push(data);
 
     });
 
-    io.on('connection', function(socket){
+});
 
-        if (currentSong) {
-            sendSong(socket);
-        }
+nextApp.prepare().then(() => {
+
+    app.get('/stream', function (req, res) {
     
+        if (currentSong) {
+
+            let liveStream = new stream.PassThrough();
+            let id = addStream(liveStream);
+
+            res.writeHead(200, {
+                'Content-Type': 'audio/mpeg',
+                'Transfer-Encoding': 'chunked',
+                'Connection': 'keep-alive'
+            });
+
+            liveStream.pipe(res).on('close', function() {
+
+                removeStream(id);
+
+            });
+
+        } else {
+            res.send(false);
+        }
+
     });
 
     app.get('/add', function (req, res) {
@@ -61,8 +78,6 @@ nextApp.prepare().then(() => {
 
             ytdl.getInfo(link, (err, info) => {
 
-                //let format = ytdl.chooseFormat(info.formats, {filter: 'audioonly', quality: 'highest'}); 
-                //console.log(format);
                 addToQueue(info);
 
             });
@@ -73,141 +88,44 @@ nextApp.prepare().then(() => {
             res.send(false);
         }
     });
-
-
-
-    app.get('/stream', function (req, res) {
     
-
-
-        if (currentSong) {
-
-
-            let passThrough = new stream.PassThrough();
-            let newStream = {id: currentSong.streamIndex, passThrough: passThrough};
-            
-
-            currentSong.streams.push(newStream);
-
-            currentSong.streamIndex++;
-
-            console.log('current streams: ',currentSong.streams.length);
-
-
-            if (req.headers.range) {
-                
-                var range = req.headers.range;
-                var positions = range.replace(/bytes=/, '').split('-');
-                var start = parseInt(positions[0], 10);
-                let total = parseInt(currentSong.size, 10); 
-
-                var end = positions[1] ? parseInt(positions[1], 10) + 1 : total - 1;
-                var chunkSize = (end - start);
-
-                console.log('range request: ',start, ' - ',end, ' | ',currentSong.size);
-
-
-                let buffer = Buffer.concat(currentSong.data);
-
-                if (start <= buffer.length) {
-
-                    buffer = buffer.slice(start, end);
-                } 
-
-                console.log('pushing ',buffer.length,' bytes onto pass through');
-
-                let splitSize = 16385;
-
-                while (buffer.length > 0) {
-
-                    if (buffer.length < splitSize) {
-                        splitSize = buffer.length;
-                    }
-
-                    let chunk = buffer.slice(0, splitSize);
-
-                    newStream.passThrough.push(chunk);
-                    buffer = buffer.slice(splitSize);
-
-                }
-
-                res.writeHead(206, {            
-                    'Content-Range': 'bytes ' + start + '-' + end + '/' + total,
-                    'Cache-Control': 'no-cache, no-store, must-revalidate', 
-                    'Pragma': 'no-cache', 
-                    'Expires': 0,
-                    'Connection' : 'keep-alive',
-                    'Accept-Ranges': 'bytes',
-                    'Content-Length': chunkSize,
-                    'Content-Type': 'audio/mpeg'
-                });
-                newStream.passThrough.on('data', function(data) {
-                   
-                    //console.log('sending: ',data.length,' bytes to browser');
-                    
-                });
-                newStream.passThrough.pipe(res).on('close', function() {
-
-                    if (currentSong) {
-                        var index = currentSong.streams.indexOf(newStream);
-
-                        currentSong.streams.splice(index, 1);
-
-                        console.log('current streams: ',currentSong.streams.length);
-                    }
-                });
-
-
-            } else {
-                console.log('no range request');
-                //no range, push all chunks from beginning to stream
-                currentSong.data.forEach(function(chunk) {
-
-                    newStream.passThrough.push(chunk);
-    
-                });
-
-                res.writeHead(200, {          
-                    'Accept-Ranges': 'bytes',
-                    'Content-Type': 'audio/mpeg',//currentSong.type,
-                    'Content-Length': currentSong.size,
-                    'Connection' : 'keep-alive',
-                    'Cache-Control': 'no-cache, no-store, must-revalidate', 
-                    'Pragma': 'no-cache', 
-                    'Expires': 0,
-                });
-
-
-                newStream.passThrough.pipe(res).on('close', function() {
-
-                    var index = currentSong.streams.indexOf(newStream);
-
-                    currentSong.streams.splice(index, 1);
-
-                    console.log('current streams: ',currentSong.streams.length);
-                });
-            }
-
-        } else {
-            res.send(false);
-        }
-
-    });
 
     app.get('*', (req, res) => {
         return handle(req, res);
     });
+
+    io.on('connection', function(socket){
+
+        if (currentSong) {
+            sendSong(socket);
+        }
     
-    
+    });
+
     server.listen(PORT, function() {
         console.log('HTTP server listening on port '+PORT);
     });
-    
-    
-
 
 });
 
+removeStream = id => {
+
+    console.log('removing stream: ', id);
+    var index = streams.indexOf(streams.find(s => s.id === id));
+    streams.splice(index, 1);
+
+}
+
+function addStream(newStream) {
+
+    console.log('adding stream: ', streamIndex);
+    let s = {id: streamIndex, passThrough: newStream};
+    streams.push(s);
+    streamIndex++;
+
+    return s.id;
+
+}
 
 function queueElapsed() {
 
@@ -224,14 +142,18 @@ function queueElapsed() {
 }
 
 var songIndex = 0;
+
 function addToQueue(info) {
 
-    //id, duration, elapsed, size, title, streams, masterStream, downloaded}
-
-    let masterStream = new stream.PassThrough();
-    
-
     let link = 'https://www.youtube.com/watch?v='+info.video_id;
+
+    let song = {
+
+        id: songIndex,
+        raw: new stream.PassThrough(),
+        mainStream: new stream.PassThrough()
+
+    }
 
     const audio = ytdl(link, {filter: 'audioonly', quality: 'highest'}).on('response', function(response) { 
       
@@ -240,29 +162,17 @@ function addToQueue(info) {
 
         console.log('format: ', type,' - size: ',size, ' duration: ',info.length_seconds);
 
-        let seconds = parseInt(info.length_seconds, 10);
-        let convertedSize = ((seconds * 160) / 8) * 1000;
-        
-        console.log('calculated size: ', convertedSize);
+        let format = ytdl.chooseFormat(info.formats, {filter: 'audioonly', quality: 'highest'}); 
 
-
-        let song = {
-
-            id: songIndex,
-            videoId: info.video_id,
-            duration: info.length_seconds,
-            elapsed: 0,
-            size: convertedSize,
-            type: type,
-            title: info.title,
-            streamIndex: 0,
-            streams: [],
-            masterStream: masterStream,
-            data: [],
-            downloaded: false,
-            rawData: []
-
-        }
+        song.videoId= info.video_id;
+        song.duration= info.length_seconds;
+        song.elapsed= 0;
+        song.type= type;
+        song.title= info.title;
+        song.data= [];
+        song.downloaded= false;
+        song.rawData= [];
+        song.bps= (parseInt(format.audioBitrate, 10) * 125); 
 
         queue.push(song);
 
@@ -272,54 +182,21 @@ function addToQueue(info) {
 
         }
 
-        masterStream.on('finish', function() {
+        song.mainStream.on('finish', function() {
 
             song.downloaded = true;
-            console.log('total size: ',dataRead);
+            console.log('finished downloading song: ',song.id);
 
         });
 
-        //if total song time ahead in the queue isn't going to last long enough to dl this song to fs at 1.5 song play speed
-        //if (queueElapsed() < (song.duration / 1.5)) {
-
-            //start piping master stream to children pass throughs
-        var dataRead = 0;
-        masterStream.on('data', function(data) {
-            dataRead += data.length;
-            
-            //console.log('downloaded: ', ((dataRead / song.size) * 100).toFixed(2) + '% ');
-            //console.log('recieved');
-            //console.log('master stream receiving data');
-
-
-            song.data.push(data);
-            
-            //console.log('data: ', data[0]);
-            
-            song.streams.forEach(function(s) {
-
-                s.passThrough.push(data);
-                //console.log('pushing data to stream: ',dataRead);
-
-            });
-
-
-        });
-        //}    
-
-        
+  
     });
 
     const ffmpeg = new Ffmpeg(audio);
 
-    ffmpeg.format('mp3').withAudioBitrate(160).pipe(masterStream);
+    ffmpeg.format('mp3').withAudioBitrate(160).pipe(song.mainStream);
 
-
-    //masterStream.pipe(fs.createWriteStream('./files/'+songIndex));
-
-    //start streams?
-
-
+    
     songIndex++;
 }
 
@@ -327,10 +204,11 @@ const secret = 'jradiosecret';
 
 function sendSong(socket) {
 
-    var address = socket.handshake.address;
-    let token = jwt.sign({id: currentSong.id, ip: address.address, time: currentSong.elapsed, duration: currentSong.duration}, secret);
+    const { id, videoId, duration, title, started } = currentSong;
 
-    socket.emit('song', token);
+    let song = { id: id, id: videoId, duration: duration, title: title, started: started };
+
+    socket.emit('song', song);
 }
 
 function nextSong() {
@@ -341,30 +219,37 @@ function nextSong() {
 
         currentSong = song;
 
+        console.log('playing next song');
+        let tempStream = new stream.PassThrough();
+
+        currentSong.mainStream.pipe(new Throttle({rate: currentSong.bps})).pipe(tempStream);
+
+        currentSong.started = Date.now();
+
+        tempStream.on('data', function(data) {
+
+            masterStream.push(data);
+
+        });
+        
+        tempStream.on('finish', function() {
+
+            console.log('done sending throttled data');
+
+            nextSong();
+           
+
+        });
+
         let sockets = io.clients().sockets;
 
         for (let socketId in sockets) {
 
             let socket = sockets[socketId]; 
-            var address = socket.handshake.address;
-            let token = jwt.sign({id: currentSong.id, ip: address.address, time: currentSong.elapsed, duration: currentSong.duration}, secret);
-            socket.emit('song', token);
+            
+            sendSong(socket);
 
         }
-
-        progressInterval = setInterval(() => {
-
-            currentSong.elapsed++;
-
-        }, 1000);
-
-        songInterval = setInterval(() => {
-            
-            clearInterval(progressInterval);
-            clearInterval(songInterval);
-            nextSong();
-
-        }, currentSong.duration * 1000);
 
     } else {
 
