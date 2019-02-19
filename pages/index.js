@@ -20,6 +20,12 @@ import DialogContentText from '@material-ui/core/DialogContentText';
 import DialogTitle from '@material-ui/core/DialogTitle';
 import NavBar from './components/NavBar';
 import CircularProgress from '@material-ui/core/CircularProgress';
+import Table from '@material-ui/core/Table';
+import TableBody from '@material-ui/core/TableBody';
+import TableCell from '@material-ui/core/TableCell';
+import TableHead from '@material-ui/core/TableHead';
+import TableRow from '@material-ui/core/TableRow';
+import Paper from '@material-ui/core/Paper';
 
 const styles = theme => ({
     root: {
@@ -74,6 +80,8 @@ class index extends Component {
 
         }
 
+        this.totalOffset = 0;
+
         this.debugMode = false;
     }
 
@@ -83,19 +91,30 @@ class index extends Component {
         
         this.socket.on('song', (data) => {
 
+            this.totalOffset = this.player.currentTime;
+            
+            console.log(this.totalOffset);
+            console.log(this.player.currentTime);
+            console.log(data.started);
+
             console.log('new song: ',data);
 
             let song = data;
-
-            //song.timeOffset = new Date(Date.now() - song.started).getSeconds();
-
-            this.setState({currentSong: song});
+            song.timeOffset = 0;
+            song.firstPlay = true;
             
-            if (this.state.waiting) {
+            if (this.state.interacted && (this.state.waiting || !this.state.playing)) {
 
                 this.player.load();
                 this.player.play();
+
+            } else {
+
+                song.timeOffset = (Date.now() - new Date(song.started)) / 1000;
+
             }
+
+            this.setState({currentSong: song});
 
         });
 
@@ -113,7 +132,8 @@ class index extends Component {
             
             if (this.state.currentSong) {
 
-                this.setState({progress: ((this.player.currentTime + this.state.currentSong.timeOffset) / this.state.currentSong.duration) * 100});
+                this.setState({progress: ((parseInt(this.player.currentTime - this.totalOffset, 10) + this.state.currentSong.timeOffset) / this.state.currentSong.duration) * 100});
+                console.log(this.state.currentSong.timeOffset);
             }
 
         }, 500);
@@ -134,6 +154,7 @@ class index extends Component {
 
         const { currentSong } = this.state;
 
+        
         this.player.play(); 
 
 
@@ -143,6 +164,7 @@ class index extends Component {
 
         this.setState({ interacted: true });
 
+        this.player.load();
         this.audioPlay();
 
 
@@ -197,7 +219,7 @@ class index extends Component {
                 <Grid container className={classes.container} direction="column" onClick={() => this.setState({volumeToggle: false})}>
 
                     <audio controls id="player" preload="auto" autoPlay={true}>
-                        <source id="source" type="audio/mpeg" src="http://98.171.80.97:3000/stream"/>
+                        <source id="source" type="audio/mpeg" src="/stream"/>
                         Your browser does not support the audio element.
                     </audio>
 
@@ -210,7 +232,34 @@ class index extends Component {
                         </Grid>
 
                     ))} 
-
+                    <Grid item>
+                        <Paper className={classes.root}>
+                            <Table className={classes.table}>
+                                <TableHead>
+                                <TableRow>
+                                    <TableCell>Dessert (100g serving)</TableCell>
+                                    <TableCell align="right">Calories</TableCell>
+                                    <TableCell align="right">Fat (g)</TableCell>
+                                    <TableCell align="right">Carbs (g)</TableCell>
+                                    <TableCell align="right">Protein (g)</TableCell>
+                                </TableRow>
+                                </TableHead>
+                                <TableBody>
+                                {rows.map(row => (
+                                    <TableRow key={row.id}>
+                                    <TableCell component="th" scope="row">
+                                        {row.name}
+                                    </TableCell>
+                                    <TableCell align="right">{row.calories}</TableCell>
+                                    <TableCell align="right">{row.fat}</TableCell>
+                                    <TableCell align="right">{row.carbs}</TableCell>
+                                    <TableCell align="right">{row.protein}</TableCell>
+                                    </TableRow>
+                                ))}
+                                </TableBody>
+                            </Table>
+                        </Paper>
+                    </Grid>
                 </Grid>
                 <AppBar position="fixed" color="default" className={classes.appBar} onMouseLeave={() => this.setState({volumeToggle: false})}>
 
@@ -260,8 +309,8 @@ class index extends Component {
                             </DialogContentText>
                         </DialogContent>
                         <DialogActions>
-                            <Button onClick={this.handleInteraction} color="secondary" autoFocus variant="outlined" style={{color: 'white'}}>
-                                Start Listening
+                            <Button onClick={this.handleInteraction} color="secondary" autoFocus variant="contained" style={{color: 'white'}}>
+                                Listen Now
                             </Button>
                         </DialogActions>
                 </Dialog>
@@ -293,7 +342,7 @@ class index extends Component {
 
             return (
                 <>
-                    {this.formatTime(Math.round(this.player.currentTime + currentSong.timeOffset))} / {this.formatTime(currentSong.duration)}
+                    {this.formatTime(Math.round((this.player.currentTime - this.totalOffset) + currentSong.timeOffset))} / {this.formatTime(currentSong.duration)}
                 </>
             );
         } else {
@@ -375,8 +424,15 @@ class index extends Component {
         this.player.onplaying = () => {
             me.debug('onplaying');
 
-            this.setState({playing: true, waiting: false, currentSong: {...this.state.currentSong, timeOffset: new Date(Date.now() - this.state.currentSong.started).getSeconds()}});
+            if (this.state.currentSong.firstPlay) {
 
+                let offset = (Date.now() - new Date(this.state.currentSong.started)) / 1000;
+
+                console.log('playing - setting offset to ',offset);
+                this.setState({playing: true, waiting: false, currentSong: {...this.state.currentSong, firstPlay: false, timeOffset: offset}});
+
+
+            }
         }
         this.player.onprogress = function() {
             me.debug('onprogress');   

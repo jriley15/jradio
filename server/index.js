@@ -47,16 +47,16 @@ nextApp.prepare().then(() => {
 
     app.get('/stream', function (req, res) {
     
+
+        res.writeHead(200, {
+            'Content-Type': 'audio/mpeg',
+            'Transfer-Encoding': 'chunked',
+            'Connection': 'keep-alive'
+        });
         if (currentSong) {
 
             let liveStream = new stream.PassThrough();
             let id = addStream(liveStream);
-
-            res.writeHead(200, {
-                'Content-Type': 'audio/mpeg',
-                'Transfer-Encoding': 'chunked',
-                'Connection': 'keep-alive'
-            });
 
             liveStream.pipe(res).on('close', function() {
 
@@ -64,8 +64,6 @@ nextApp.prepare().then(() => {
 
             });
 
-        } else {
-            res.send(false);
         }
 
     });
@@ -224,8 +222,6 @@ function nextSong() {
 
         currentSong.mainStream.pipe(new Throttle({rate: currentSong.bps})).pipe(tempStream);
 
-        currentSong.started = Date.now();
-
         tempStream.on('data', function(data) {
 
             masterStream.push(data);
@@ -241,6 +237,8 @@ function nextSong() {
 
         });
 
+        currentSong.started = Date.now();
+        
         let sockets = io.clients().sockets;
 
         for (let socketId in sockets) {
