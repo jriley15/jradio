@@ -34,6 +34,9 @@ var masterStream = new stream.PassThrough();
 var streamIndex = 0;
 
 var userCount = 0;
+var userIndex = 0;
+
+var messages = [];
 
 masterStream.on('data', function(data) {
 
@@ -88,6 +91,7 @@ nextApp.prepare().then(() => {
         }
     });
 
+
     app.get('*', (req, res) => {
         return handle(req, res);
     });
@@ -99,6 +103,9 @@ nextApp.prepare().then(() => {
             sendSongs(socket);
         }
 
+        const userId = userIndex;
+
+        userIndex++;
         userCount++;
         io.emit('users', userCount);
 
@@ -106,6 +113,12 @@ nextApp.prepare().then(() => {
 
             userCount--;
             io.emit('users', userCount);
+        });
+
+        socket.on('message', function(message) {
+
+            
+
         });
     
     });

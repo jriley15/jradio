@@ -10,7 +10,9 @@ import Message from '@material-ui/icons/Message';
 import { Typography } from '@material-ui/core';
 import DownArrow from '@material-ui/icons/ArrowDownward';
 import TextField from '@material-ui/core/TextField';
-
+import grey from '@material-ui/core/colors/grey';
+import InputAdornment from '@material-ui/core/InputAdornment';
+import IconButton from '@material-ui/core/IconButton';
 
 const styles = theme => ({
     root: {
@@ -19,14 +21,17 @@ const styles = theme => ({
 
     messageForm: {
         position: 'fixed',
+        left: 0,
+        right: 0,
         bottom: theme.spacing.unit * 8,
-        width: '100%'
+        width: '100%',
+        padding: theme.spacing.unit,
+        backgroundColor: grey[900]
     },
 
     textField: {
 
-        marginLeft: theme.spacing.unit,
-        marginRight: theme.spacing.unit
+       
     },
 
     container: {
@@ -78,6 +83,7 @@ class Chat extends Component {
             msgFormToggle: true,
             scrollDown: false,
             autoScroll: true,
+            message: ''
 
         }
 
@@ -164,16 +170,33 @@ class Chat extends Component {
 
                     
                 </Grid>
-                <Slide direction="up" in={!msgFormToggle} className={classes.messageForm}>
-                    <TextField
-                        id="message"
-                        label="Message"
-                        className={classes.textField}
-                        value={this.state.message}
-                        onChange={this.handleChange}
-                        margin="normal"
-                        variant="filled"
-                    />
+                <Slide direction="up" in={!msgFormToggle} >
+                    <div className={classes.messageForm}>
+                        <TextField
+                            id="message"
+                            label="Message"
+                            className={classes.textField}
+                            value={this.state.message}
+                            onChange={this.handleChange}
+                            margin="none"
+                            variant="filled"
+                            fullWidth
+                            autoFocus
+                            InputProps={{
+                            endAdornment:
+                                <InputAdornment position="end">
+                                  <IconButton
+                                    aria-label="Toggle password visibility"
+                                    onClick={() => this.setState({msgFormToggle: true})}
+                                  >
+                                    <Send />
+                                  </IconButton>
+                                </InputAdornment>
+                              
+                            }}
+                        />
+                        
+                    </div>
                 </Slide>
 
                 <Slide direction="left" in={msgFormToggle}>
