@@ -26,6 +26,10 @@ import TableCell from '@material-ui/core/TableCell';
 import TableHead from '@material-ui/core/TableHead';
 import TableRow from '@material-ui/core/TableRow';
 import Paper from '@material-ui/core/Paper';
+import Dot from '@material-ui/icons/FiberManualRecord';
+import Tabs from '@material-ui/core/Tabs';
+import Tab from '@material-ui/core/Tab';
+import Chat from './components/Chat';
 
 const styles = theme => ({
     root: {
@@ -53,11 +57,28 @@ const styles = theme => ({
     },
     slider: {
         padding: '22px 0px',
-      },
+    },
+    tableRoot: {
+        marginTop: theme.spacing.unit,
+        overflowX: 'auto',
+    },
 
+    liveDot: {
+        color: 'red', 
+        fontSize: '0.5rem',
+        marginRight: theme.spacing.unit / 2
+    },
+
+    live: {
+        marginRight: theme.spacing.unit
+    },
+    volumePad: {
+        padding: (theme.spacing.unit * 4.375) /2
+    }
 
 
   });
+
 
 class index extends Component {
 
@@ -76,7 +97,16 @@ class index extends Component {
             debug: [],
 
             interacted: false,
-            waiting: false
+            waiting: false,
+
+            songs: [],
+            users: 0,
+
+            value: 1,
+
+            messages: [],
+
+            fixedTabs: false
 
         }
 
@@ -118,6 +148,24 @@ class index extends Component {
 
         });
 
+        this.socket.on('messages', (messages) => {
+
+            this.setState({messages: messages});
+
+        });
+
+        this.socket.on('songs', (songs) => {
+
+            this.setState({songs: songs});
+
+        });
+
+        this.socket.on('users', (userCount) => {
+
+            this.setState({users: userCount});
+
+        });
+
         this.player =  document.getElementById("player");
 
 
@@ -138,7 +186,21 @@ class index extends Component {
 
         }, 500);
 
+        //window.addEventListener('scroll', this.handleScroll);
+
         this.initDebugEvents();
+    }
+
+    handleScroll = (event) => {
+
+        console.log(document.documentElement.scrollTop);
+
+        if (document.documentElement.scrollTop >= 56) {
+            this.setState({fixedTabs: true});
+        } else {
+            this.setState({fixedTabs: false});
+        }
+
     }
 
     debug  = (data) => {
@@ -154,9 +216,7 @@ class index extends Component {
 
         const { currentSong } = this.state;
 
-        
         this.player.play(); 
-
 
     }
 
@@ -193,7 +253,7 @@ class index extends Component {
             if (waiting) {
                 return (
                     <IconButton color="inherit" aria-label="Buffering">
-                        <CircularProgress color="secondary" />
+                        <CircularProgress color="secondary" size={35}/>
                     </IconButton>
                 );
             } else {
@@ -207,60 +267,92 @@ class index extends Component {
         }
     }
 
+    handleChange = (event, value) => {
+
+        this.setState({ value });
+
+    };
+
     render() {
 
         const { classes } = this.props;
-        const { volumeToggle, debug, currentSong } = this.state;
+        const { volumeToggle, debug, currentSong, songs, users, value, fixedTabs } = this.state;
 
         return (
 
             <>
                 <NavBar/>
-                <Grid container className={classes.container} direction="column" onClick={() => this.setState({volumeToggle: false})}>
 
-                    <audio controls id="player" preload="auto" autoPlay={true}>
+
+                <AppBar position={fixedTabs ? "fixed" : "static"} color="default">
+                    <Tabs value={value} onChange={this.handleChange} variant="fullWidth">
+                        <Tab label="Queue" />
+                        <Tab label="Chat" />
+                        <Tab label="Options" />
+                    </Tabs>
+                </AppBar>
+
+                <Grid container className={classes.container} direction="column" onClick={() => this.setState({volumeToggle: false})} style={{paddingTop: (fixedTabs ? 48 : 8)}}>
+
+                    <audio controls id="player" preload="auto" autoPlay={true} hidden>
                         <source id="source" type="audio/mpeg" src="/stream"/>
                         Your browser does not support the audio element.
                     </audio>
-
-                    {this.debugMode && debug.map((item) => (
-
+                    
+                    {value === 0 && <>
+                        <Typography variant="body2">
+                            Live users: {users}
+                        </Typography>
                         <Grid item>
-                            <Typography variant="body2">
-                                {item}
-                            </Typography>
-                        </Grid>
+                            <Paper className={classes.tableRoot}>
 
-                    ))} 
-                    <Grid item>
-                        <Paper className={classes.root}>
-                            <Table className={classes.table}>
-                                <TableHead>
-                                <TableRow>
-                                    <TableCell>Dessert (100g serving)</TableCell>
-                                    <TableCell align="right">Calories</TableCell>
-                                    <TableCell align="right">Fat (g)</TableCell>
-                                    <TableCell align="right">Carbs (g)</TableCell>
-                                    <TableCell align="right">Protein (g)</TableCell>
-                                </TableRow>
-                                </TableHead>
-                                <TableBody>
-                                {rows.map(row => (
-                                    <TableRow key={row.id}>
-                                    <TableCell component="th" scope="row">
-                                        {row.name}
-                                    </TableCell>
-                                    <TableCell align="right">{row.calories}</TableCell>
-                                    <TableCell align="right">{row.fat}</TableCell>
-                                    <TableCell align="right">{row.carbs}</TableCell>
-                                    <TableCell align="right">{row.protein}</TableCell>
-                                    </TableRow>
-                                ))}
-                                </TableBody>
-                            </Table>
-                        </Paper>
-                    </Grid>
+                                {songs.length > 0 && 
+                                    <Table className={classes.table}>
+                                        <TableHead>
+                                            <TableRow>
+                                                <TableCell>Upcoming songs</TableCell>
+                                                <TableCell></TableCell>
+                                            </TableRow>
+                                        </TableHead>
+                                        <TableBody>
+                                        {songs.map(song => (
+                                            <TableRow key={song.id}>
+                                                <TableCell padding="dense" align="center">
+                                                    {song.title}
+                                                </TableCell>
+                                                <TableCell align="center">
+                                                    <img src={song.thumb} />
+                                                    {this.formatTime(song.duration)}
+                                                </TableCell>
+                                            </TableRow>
+                                        ))}
+                                        </TableBody>
+                                    </Table>
+                                }
+
+                                {songs.length === 0 && 
+                                    <Typography variant="body1" align="center">
+                                        No songs in the queue
+                                    </Typography>
+                                }
+                            </Paper>
+                        </Grid>
+                    </>}
+                    {value === 1 && <Grid item><Chat messages={this.state.messages}/></Grid> }
+                    {value === 2 && <>
+                        {this.debugMode && debug.map((item) => (
+
+                            <Grid item>
+                                <Typography variant="body2">
+                                    {item}
+                                </Typography>
+                            </Grid>
+
+                        ))} 
+                    </>}
+
                 </Grid>
+
                 <AppBar position="fixed" color="default" className={classes.appBar} onMouseLeave={() => this.setState({volumeToggle: false})}>
 
                     <LinearProgress variant="determinate" color="secondary" value={this.state.progress} />
@@ -268,16 +360,16 @@ class index extends Component {
 
                         {this.audioButton()}
                         
-                        <div>
-                            <Typography variant="body2" align="center">
+                        <Grid item zeroMinWidth>
+                            <Typography variant="body2" align="center" noWrap>
                                 {currentSong ? currentSong.title : 'N/A'}
                             </Typography>
                             <Typography variant="body1" align="center">
                                 {this.time()}
                             </Typography>
-                        </div>
+                        </Grid>
 
-                        <IconButton color="inherit" onClick={() => {this.setState({volumeToggle: !this.state.volumeToggle})}}>
+                        <IconButton color="inherit" className={classes.volumePad} onClick={() => {this.setState({volumeToggle: !this.state.volumeToggle})}}>
                             <Volume />
                         </IconButton>
 
@@ -294,6 +386,7 @@ class index extends Component {
 
                     </Toolbar>
                 </AppBar>
+                    
 
                 <Dialog
                     open={!this.state.interacted}
@@ -304,7 +397,7 @@ class index extends Component {
                         <DialogTitle id="alert-dialog-title">{"Welcome to JRadio"}</DialogTitle>
                         <DialogContent>
                             <DialogContentText id="alert-dialog-description">
-                                Submit Youtube and Soundcloud links to listen to on a synchronized radio with your friends. 
+                                Submit Youtube and Soundcloud links to listen to on a synchronized live radio with your friends. 
                                 Start listening now!
                             </DialogContentText>
                         </DialogContent>
@@ -337,12 +430,13 @@ class index extends Component {
     time = () => {
 
         const { currentSong } = this.state;
+        const { classes } = this.props;
 
         if (currentSong) {
 
             return (
                 <>
-                    {this.formatTime(Math.round((this.player.currentTime - this.totalOffset) + currentSong.timeOffset))} / {this.formatTime(currentSong.duration)}
+                    <Typography inline variant="overline" className={classes.live}><Dot className={classes.liveDot}/>LIVE</Typography>{this.formatTime(Math.round((this.player.currentTime - this.totalOffset) + currentSong.timeOffset))} / {this.formatTime(currentSong.duration)}
                 </>
             );
         } else {
@@ -418,8 +512,9 @@ class index extends Component {
         this.player.ondurationchange = function() {
             me.debug('ondurationchange');
         }
-        this.player.canplay = function() {
+        this.player.canplay = () => {
             me.debug('canplay');
+            this.setState({waiting: false});
         }
         this.player.onplaying = () => {
             me.debug('onplaying');
@@ -432,6 +527,9 @@ class index extends Component {
                 this.setState({playing: true, waiting: false, currentSong: {...this.state.currentSong, firstPlay: false, timeOffset: offset}});
 
 
+            } else {
+
+                this.setState({playing: true, waiting: false});
             }
         }
         this.player.onprogress = function() {
@@ -455,12 +553,13 @@ class index extends Component {
             me.debug('onerror: ',me.player.onerror.code);
             
         }
-        this.player.oncanplaythrough = function() {
+        this.player.oncanplaythrough = () => {
             me.debug('oncanplaythrough');
+            this.setState({waiting: false});
         }
         this.player.onpause = () => {
             me.debug('onpause');
-            this.setState({playing: false});
+            this.setState({playing: false, waiting: false});
         } 
     }
 }

@@ -33,6 +33,8 @@ var streams = [];
 var masterStream = new stream.PassThrough();
 var streamIndex = 0;
 
+var userCount = 0;
+
 masterStream.on('data', function(data) {
 
     streams.forEach(function(s) {
@@ -47,7 +49,6 @@ nextApp.prepare().then(() => {
 
     app.get('/stream', function (req, res) {
     
-
         res.writeHead(200, {
             'Content-Type': 'audio/mpeg',
             'Transfer-Encoding': 'chunked',
@@ -86,7 +87,6 @@ nextApp.prepare().then(() => {
             res.send(false);
         }
     });
-    
 
     app.get('*', (req, res) => {
         return handle(req, res);
@@ -96,9 +96,21 @@ nextApp.prepare().then(() => {
 
         if (currentSong) {
             sendSong(socket);
+            sendSongs(socket);
         }
+
+        userCount++;
+        io.emit('users', userCount);
+
+        socket.on('disconnect', function() {
+
+            userCount--;
+            io.emit('users', userCount);
+        });
     
     });
+
+
 
     server.listen(PORT, function() {
         console.log('HTTP server listening on port '+PORT);
@@ -153,6 +165,8 @@ function addToQueue(info) {
 
     }
 
+    //console.log(info);
+
     const audio = ytdl(link, {filter: 'audioonly', quality: 'highest'}).on('response', function(response) { 
       
         let size = parseInt(response.headers['content-length'], 10);
@@ -162,21 +176,32 @@ function addToQueue(info) {
 
         let format = ytdl.chooseFormat(info.formats, {filter: 'audioonly', quality: 'highest'}); 
 
-        song.videoId= info.video_id;
-        song.duration= info.length_seconds;
-        song.elapsed= 0;
-        song.type= type;
-        song.title= info.title;
-        song.data= [];
-        song.downloaded= false;
-        song.rawData= [];
-        song.bps= (parseInt(format.audioBitrate, 10) * 125); 
+        song.videoId = info.video_id;
+        song.duration = info.length_seconds;
+        song.thumb = info.thumbnail_url;
+        song.elapsed = 0;
+        song.type = type;
+        song.title = info.title;
+        song.data = [];
+        song.downloaded = false;
+        song.rawData = [];
+        song.bps = (parseInt(format.audioBitrate, 10) * 125); 
 
         queue.push(song);
 
         if (!currentSong) {
         
             nextSong();
+
+        }
+
+        let sockets = io.clients().sockets;
+        for (let socketId in sockets) {
+
+            let socket = sockets[socketId]; 
+            
+            //sendSong(socket);
+            sendSongs(socket);
 
         }
 
@@ -202,11 +227,29 @@ const secret = 'jradiosecret';
 
 function sendSong(socket) {
 
-    const { id, videoId, duration, title, started } = currentSong;
+    if (currentSong) {
+        const { id, videoId, duration, title, started, thumb } = currentSong;
 
-    let song = { id: id, id: videoId, duration: duration, title: title, started: started };
+        let song = { id: id, videoId: videoId, duration: duration, title: title, started: started, thumb: thumb };
 
-    socket.emit('song', song);
+        socket.emit('song', song);
+    }
+}
+
+function sendSongs(socket) {
+
+    if (queue.length > 0) {
+
+        let songs = [];
+        queue.forEach((song) => {
+
+            const { id, videoId, duration, title, thumb } = song;
+            songs.push({id: id, videoId: videoId, duration: duration, title: title, thumb: thumb });
+
+        });
+        socket.emit('songs', songs);
+    }
+
 }
 
 function nextSong() {
@@ -246,6 +289,7 @@ function nextSong() {
             let socket = sockets[socketId]; 
             
             sendSong(socket);
+            sendSongs(socket);
 
         }
 
