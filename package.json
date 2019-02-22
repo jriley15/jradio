@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "nodemon server/index.js",
     "build": "next build",
-    "start": "next start server/index.js"
+    "start": "next start",
+    "prod": "NODE_ENV=production next build && NODE_ENV=production node server/index.js"
   },
   "author": "",
   "license": "ISC",
