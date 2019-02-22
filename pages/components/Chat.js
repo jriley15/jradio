@@ -16,17 +16,20 @@ import IconButton from '@material-ui/core/IconButton';
 
 const styles = theme => ({
     root: {
-
+        
     },
 
     messageForm: {
         position: 'fixed',
         left: 0,
         right: 0,
-        bottom: theme.spacing.unit * 8,
+        bottom: 0,//theme.spacing.unit * 8,
         width: '100%',
-        padding: theme.spacing.unit,
-        backgroundColor: grey[900]
+        paddingLeft: theme.spacing.unit,
+        paddingRight: theme.spacing.unit,
+        paddingTop: theme.spacing.unit,
+        backgroundColor: grey[900],
+        zIndex: 5000
     },
 
     textField: {
@@ -38,7 +41,8 @@ const styles = theme => ({
         //paddingBottom: (theme.spacing.unit * 7), //+ (theme.spacing.unit * 7),
         overflowY: 'auto',
         maxHeight: 'calc(100vh - ' + (theme.spacing.unit * 23) + 'px)',
-        scrollBehaviour: 'smooth' 
+        scrollBehaviour: 'smooth',
+        width: 'inherit'
     },
 
     fab: {
@@ -79,14 +83,12 @@ class Chat extends Component {
 
         this.state = {
 
-            messages: ['Test Test Test Test Test Test Test Test Test Test Test Test Test Test Test Test Test Test Test Test Test Test ', 'Test', 'Test', 'Test', 'Test', 'Test', 'Test', 'Test', 'Test', 'Test', 'Test', 'Test', 'Test', 'Test', 'Test', 'Test', 'Test', 'Test', 'Test', 'Test', 'Test', 'Test', 'Test', 'Test', 'Test', 'Test', 'Test', 'Test', 'Test', 'Test', 'Test', 'Test', 'Test', 'Test', 'Test', 'Test', 'Test', 'Test', 'Test', 'Test', 'Test', 'Test', 'Test', 'Test', 'Test', 'Test', 'Test', 'Test', 'Test', 'Test', 'Test', 'Test', 'Test', 'Test', 'Test'],//props.messages
-            msgFormToggle: true,
+            msgFormToggle: false,
             scrollDown: false,
             autoScroll: true,
             message: ''
 
         }
-
         
     }
 
@@ -96,6 +98,7 @@ class Chat extends Component {
 
         this.checkScroll();
         this.checkAutoScroll();
+
 
     }
 
@@ -112,6 +115,7 @@ class Chat extends Component {
         }
 
     }
+
 
     checkScroll = () => {
 
@@ -136,7 +140,45 @@ class Chat extends Component {
         this.setState({[e.target.id]: e.target.value});
   
     }
-  
+
+    toggleMessageForm = () => {
+
+        this.setState({msgFormToggle: !this.state.msgFormToggle});
+        //this.state.form.focus();
+        //this.checkAutoScroll();
+    }
+
+    sendMessage = () => {
+
+        if (this.state.message) {
+
+            this.props.socket.emit('message', this.state.message);
+
+            this.setState({message: ''});
+        }
+
+    }
+
+    handleKeyPress = e => {
+
+        if (e.key === 'Enter') {
+
+            this.sendMessage();
+
+        }
+
+    }
+
+    componentDidUpdate(oldProps) {
+
+        if (oldProps.messages !== this.props.messages) {
+
+            this.checkAutoScroll();
+
+        }
+
+    }
+
   
     render() {
 
@@ -145,11 +187,11 @@ class Chat extends Component {
 
         return (
             <div className={classes.root}>
-                <Grid id="chat" container direction="row" className={classes.container} onScroll={this.handleScroll}>                  
+                <Grid id="chat" container direction="row" className={classes.container} onScroll={this.handleScroll} onClick={() => this.setState({msgFormToggle: false})}>                  
 
-                    {messages.map((msg) => (
+                    {this.props.messages.map((msg) => (
 
-                        <Grid item xs={12}>
+                        <Grid item xs={12} key={msg.id}>
 
                             <Grid container direction="row">
                                 <Grid item>
@@ -157,10 +199,9 @@ class Chat extends Component {
                                         <Person/>
                                     </Avatar>
                                 </Grid>
-                                <Grid item className={classes.messageContainer} xs={10}>
-                                    <Typography variant="body1" inline className={classes.messageName}><b>User</b></Typography>
+                                <Grid item className={classes.messageContainer} xs={10} style={{wordWrap: 'break-word'}}>
 
-                                    <Typography variant="body1" inline>{msg}</Typography>
+                                    <Typography variant="body1" inline><b>{msg.name}</b> {msg.message}</Typography>
                                 </Grid>
                             </Grid>
 
@@ -170,7 +211,7 @@ class Chat extends Component {
 
                     
                 </Grid>
-                <Slide direction="up" in={!msgFormToggle} >
+                <Slide direction="up" in={msgFormToggle} mountOnEnter unmountOnExit >
                     <div className={classes.messageForm}>
                         <TextField
                             id="message"
@@ -182,12 +223,13 @@ class Chat extends Component {
                             variant="filled"
                             fullWidth
                             autoFocus
+                            onKeyPress={this.handleKeyPress}
                             InputProps={{
                             endAdornment:
                                 <InputAdornment position="end">
                                   <IconButton
                                     aria-label="Toggle password visibility"
-                                    onClick={() => this.setState({msgFormToggle: true})}
+                                    onClick={this.sendMessage}
                                   >
                                     <Send />
                                   </IconButton>
@@ -199,8 +241,8 @@ class Chat extends Component {
                     </div>
                 </Slide>
 
-                <Slide direction="left" in={msgFormToggle}>
-                    <Fab color="primary" aria-label="Send message" size="small" className={classes.fab} onClick={() => this.setState({msgFormToggle: false})}>
+                <Slide direction="left" in={true}>
+                    <Fab color="primary" aria-label="Send message" size="small" className={classes.fab} onClick={this.toggleMessageForm}>
                         <Message />
                     </Fab>
                 </Slide>

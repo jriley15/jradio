@@ -102,7 +102,7 @@ class index extends Component {
             songs: [],
             users: 0,
 
-            value: 1,
+            value: 0,
 
             messages: [],
 
@@ -113,11 +113,13 @@ class index extends Component {
         this.totalOffset = 0;
 
         this.debugMode = false;
+
+        this.socket = io();
     }
 
     componentDidMount() {
 
-        this.socket = io();
+        //this.socket = io();
         
         this.socket.on('song', (data) => {
 
@@ -154,6 +156,12 @@ class index extends Component {
 
         });
 
+        this.socket.on('message', (message) => {
+
+            this.setState({messages: [...this.state.messages, message]});
+
+        });
+
         this.socket.on('songs', (songs) => {
 
             this.setState({songs: songs});
@@ -181,7 +189,7 @@ class index extends Component {
             if (this.state.currentSong) {
 
                 this.setState({progress: ((parseInt(this.player.currentTime - this.totalOffset, 10) + this.state.currentSong.timeOffset) / this.state.currentSong.duration) * 100});
-                console.log(this.state.currentSong.timeOffset);
+                //console.log(this.state.currentSong.timeOffset);
             }
 
         }, 500);
@@ -310,7 +318,7 @@ class index extends Component {
                                     <Table className={classes.table}>
                                         <TableHead>
                                             <TableRow>
-                                                <TableCell>Upcoming songs</TableCell>
+                                                <TableCell>Upcoming</TableCell>
                                                 <TableCell></TableCell>
                                             </TableRow>
                                         </TableHead>
@@ -320,9 +328,14 @@ class index extends Component {
                                                 <TableCell padding="dense" align="center">
                                                     {song.title}
                                                 </TableCell>
-                                                <TableCell align="center">
-                                                    <img src={song.thumb} />
-                                                    {this.formatTime(song.duration)}
+                                                <TableCell align="center" direction="column">
+                                                    <Grid item>
+                                                        <img src={song.thumb} />
+                                                    </Grid>
+                                                    <Grid item>
+                                                        {this.formatTime(song.duration)}
+                                                    </Grid>
+                                                    
                                                 </TableCell>
                                             </TableRow>
                                         ))}
@@ -338,7 +351,7 @@ class index extends Component {
                             </Paper>
                         </Grid>
                     </>}
-                    {value === 1 && <Grid item><Chat messages={this.state.messages}/></Grid> }
+                    {value === 1 && <Grid item xs={12}><Chat messages={this.state.messages} socket={this.socket}/></Grid> }
                     {value === 2 && <>
                         {this.debugMode && debug.map((item) => (
 

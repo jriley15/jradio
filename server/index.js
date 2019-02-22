@@ -37,6 +37,7 @@ var userCount = 0;
 var userIndex = 0;
 
 var messages = [];
+var messageIndex = 0;
 
 masterStream.on('data', function(data) {
 
@@ -98,12 +99,14 @@ nextApp.prepare().then(() => {
 
     io.on('connection', function(socket){
 
+        const userId = userIndex;
+
         if (currentSong) {
             sendSong(socket);
             sendSongs(socket);
         }
 
-        const userId = userIndex;
+        sendMessages(socket, userId);
 
         userIndex++;
         userCount++;
@@ -117,8 +120,13 @@ nextApp.prepare().then(() => {
 
         socket.on('message', function(message) {
 
-            
+            let msg = {id: messageIndex, name: 'Guest '+userId, message: message}
 
+            messages.push(msg);
+
+            io.emit('message', msg);
+
+            messageIndex++;
         });
     
     });
@@ -262,6 +270,17 @@ function sendSongs(socket) {
         });
         socket.emit('songs', songs);
     }
+
+}
+
+function sendMessages(socket, id) {
+
+    if (messages.length > 0) {
+
+        socket.emit('messages', messages);
+    }
+
+    io.emit('message', {message: 'Guest '+id+' has joined the room.'});
 
 }
 
