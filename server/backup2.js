@@ -15,8 +15,7 @@ const ffmpegInstaller = require('@ffmpeg-installer/ffmpeg');
 const Ffmpeg = require('fluent-ffmpeg');
 Ffmpeg.setFfmpegPath(ffmpegInstaller.path);
 const Throttle = require('stream-throttle').Throttle;
-//var CombinedStream = require('combined-stream');
-var youtubeStream = require('youtube-audio-stream')
+
 //TESTING
 /*
 ytdl.getInfo('https://www.youtube.com/watch?v=6-hRrKFkAQE', (err, info) => {
@@ -31,7 +30,7 @@ var queue = [];
 var currentSong = null;
 
 var streams = [];
-//var masterStream = CombinedStream.create({pauseStreams: false});
+var masterStream = new stream.PassThrough();
 var streamIndex = 0;
 
 var userCount = 0;
@@ -40,7 +39,7 @@ var userIndex = 0;
 var messages = [];
 var messageIndex = 0;
 
-var masterStream = new stream.PassThrough();
+
 /*masterStream.on('data', function(data) {
 
     streams.forEach(function(s) {
@@ -51,24 +50,8 @@ var masterStream = new stream.PassThrough();
 
 });*/
 
-/*
-var links = ["https://www.youtube.com/watch?v=ABFno49CZIk", 
-            "https://www.youtube.com/watch?v=KxW0KjJGU_o",
-            "https://www.youtube.com/watch?v=ABFno49CZIk"];
-
-
-var master = CombinedStream.create({pauseStreams: false});
-
-var livePassThrough = new stream.PassThrough();
-
-
-//console.log(master);
-let rate = 160 * 125;
-master.pipe(new Throttle({rate: rate})).pipe(livePassThrough, {end: false});
-*/
 
 nextApp.prepare().then(() => {
-
 
     app.get('/stream', function (req, res) {
     
@@ -78,9 +61,8 @@ nextApp.prepare().then(() => {
             'Connection': 'keep-alive'
         });
 
-        let rate = 160 * 125;
 
-        masterStream.pipe(res).on('close', function() {
+        masterStream.pipe(new Throttle({rate: song.bps})).pipe(res).on('close', function() {
 
             //removeStream(id);
             console.log('closing response');
@@ -189,15 +171,6 @@ function queueElapsed() {
 
 var songIndex = 0;
 
-const opt = {
-    videoFormat: 'mp4',
-    quality: 'lowest',
-    audioFormat: 'mp3',
-    filter (format) {
-      return format.container === opt.videoFormat && format.audioEncoding
-    }
-  }
-
 function addToQueue(info) {
 
     let link = 'https://www.youtube.com/watch?v='+info.video_id;
@@ -210,7 +183,10 @@ function addToQueue(info) {
 
     }
 
-    const audio = ytdl(link, opt).on('response', function(response) { 
+    let audioStream = new stream.PassThrough();
+    //console.log(info);
+
+    const audio = ytdl(link, {filter: 'audioonly', quality: 'highest'}).on('response', function(response) { 
       
         let size = parseInt(response.headers['content-length'], 10);
         let type = response.headers['content-type'];
@@ -252,7 +228,7 @@ function addToQueue(info) {
         }
 
   
-    });
+    }).pipe(audioStream);
 
     let bufferStream = new stream.PassThrough();
     let finalSize = 0;
@@ -273,11 +249,12 @@ function addToQueue(info) {
     });
 
 
-    const ffmpeg = new Ffmpeg(audio);
+    const ffmpeg = new Ffmpeg(audioStream);
 
     ffmpeg.format('mp3').withAudioBitrate(160).pipe(bufferStream);
 
-    //masterStream.append(bufferStream);
+
+
     
     songIndex++;
 }
@@ -329,14 +306,13 @@ function nextSong() {
         let song = queue.shift();
         let tempStream = new stream.PassThrough();
         let dataSize = 0;
-        let rate = 125 * 160;
 
-        song.mainStream.pipe(new Throttle({rate: rate})).pipe(tempStream).pipe(masterStream);
-
+        song.mainStream.pipe(masterStream);
+        console.log(4);
         song.started = Date.now();
 
         currentSong = song;
-
+        console.log(5);
         tempStream.on('data', function(data) {
 
             //masterStream.push(data);

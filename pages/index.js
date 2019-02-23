@@ -137,6 +137,7 @@ class index extends Component {
             
             if (this.state.interacted && (this.state.waiting || !this.state.playing)) {
 
+                console.log('loading / playing');
                 this.player.load();
                 this.player.play();
 
@@ -302,7 +303,7 @@ class index extends Component {
 
                 <Grid container className={classes.container} direction="column" onClick={() => this.setState({volumeToggle: false})} style={{paddingTop: (fixedTabs ? 48 : 8)}}>
 
-                    <audio controls id="player" preload="auto" autoPlay={true} hidden>
+                    <audio controls id="player" hidden>
                         <source id="source" type="audio/mpeg" src="/stream"/>
                         Your browser does not support the audio element.
                     </audio>
