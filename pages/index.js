@@ -282,6 +282,12 @@ class index extends Component {
 
     };
 
+    skipSong = () => {
+
+        
+
+    };
+
     render() {
 
         const { classes } = this.props;
@@ -354,6 +360,10 @@ class index extends Component {
                     </>}
                     {value === 1 && <Grid item xs={12}><Chat messages={this.state.messages} socket={this.socket}/></Grid> }
                     {value === 2 && <>
+
+                        <Button variant="contained" color="secondary" onClick={this.skipSong}>
+                        </Button>
+
                         {this.debugMode && debug.map((item) => (
 
                             <Grid item>

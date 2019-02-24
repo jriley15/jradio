@@ -345,7 +345,10 @@ function nextSong() {
             //console.log(dataSize);
             if (dataSize >= song.finalSize) {
                 
-                //tempStream.unpipe(masterStream);
+                tempStream.unpipe(masterStream);
+                song.mainStream.end();
+
+
                 console.log('done sending throttled data');
                 //delay to account for buffering
 
@@ -353,6 +356,8 @@ function nextSong() {
             }
 
         });
+
+
 
         let sockets = io.clients().sockets;
 
