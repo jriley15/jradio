@@ -284,7 +284,7 @@ class index extends Component {
 
     skipSong = () => {
 
-        
+
 
     };
 
@@ -362,6 +362,7 @@ class index extends Component {
                     {value === 2 && <>
 
                         <Button variant="contained" color="secondary" onClick={this.skipSong}>
+                            Skip Song
                         </Button>
 
                         {this.debugMode && debug.map((item) => (

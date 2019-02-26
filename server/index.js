@@ -69,6 +69,15 @@ master.pipe(new Throttle({rate: rate})).pipe(livePassThrough, {end: false});
 
 nextApp.prepare().then(() => {
 
+    app.get('/skip', function (req, res) {
+
+        if (currentSong) {
+            currentSong.skip = true;
+        }
+
+        res.send(true);
+
+    });
 
     app.get('/stream', function (req, res) {
     
@@ -80,11 +89,27 @@ nextApp.prepare().then(() => {
 
         let rate = 160 * 125;
 
-        masterStream.pipe(res).on('close', function() {
+        /*masterStream.pipe(res).on('close', function() {
 
             //removeStream(id);
             console.log('closing response');
+        });*/
+
+        let pt = new stream.PassThrough();
+
+        masterStream.on('data', function(data) {
+
+            pt.push(data);
+
         });
+
+        pt.pipe(res).on('close', function() {
+
+            //removeStream(id);
+            console.log('closing response');
+        });;
+
+
 
     });
 
@@ -94,11 +119,19 @@ nextApp.prepare().then(() => {
 
         if (link) {
 
-            ytdl.getInfo(link, (err, info) => {
+            try {
+                ytdl.getInfo(link, (err, info) => {
 
-                addToQueue(info);
+                    if (info) { 
+                        addToQueue(info);
+                    } else {
+                        console.log('invalid link: ',link);
+                    }
+                });
+            } catch(error) {
+                console.error('caught getInfo error: ', error);
 
-            });
+            }
 
             res.send(true);
         } else {
@@ -232,6 +265,8 @@ function addToQueue(info) {
         song.rawData = [];
         song.bps = 160 * 125; 
         song.size = convertedSize;
+        song.skip = false;
+        song.destroy = false;
 
         queue.push(song);
 
@@ -259,8 +294,13 @@ function addToQueue(info) {
 
     bufferStream.on('data', function(data) {
 
-        song.mainStream.push(data);
-        finalSize += data.length;
+        if (!song.skip) {
+            song.mainStream.push(data);
+            finalSize += data.length;
+        } else {
+            audio.destroy();
+        }
+        //console.log('downloading: ', ((finalSize / song.size) * 100).toFixed(2) + '% ');
 
     });
 
@@ -275,7 +315,9 @@ function addToQueue(info) {
 
     const ffmpeg = new Ffmpeg(audio);
 
-    ffmpeg.format('mp3').withAudioBitrate(160).pipe(bufferStream);
+    let mp3Stream = ffmpeg.format('mp3').withAudioBitrate(160);
+
+    mp3Stream.pipe(bufferStream);
 
     //masterStream.append(bufferStream);
     
@@ -343,7 +385,7 @@ function nextSong() {
             dataSize += data.length;
 
             //console.log(dataSize);
-            if (dataSize >= song.finalSize) {
+            if (dataSize >= song.finalSize || song.skip) {
                 
                 tempStream.unpipe(masterStream);
                 song.mainStream.end();
