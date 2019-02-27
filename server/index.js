@@ -16,7 +16,8 @@ const Ffmpeg = require('fluent-ffmpeg');
 Ffmpeg.setFfmpegPath(ffmpegInstaller.path);
 const Throttle = require('stream-throttle').Throttle;
 var soundcloudr = require('soundcloudr');
-
+const axios = require('axios');
+var request = require('request');
 //TESTING
 /*
 ytdl.getInfo('https://www.youtube.com/watch?v=6-hRrKFkAQE', (err, info) => {
@@ -31,8 +32,8 @@ var queue = [];
 var currentSong = null;
 
 var streams = [];
-//var masterStream = CombinedStream.create({pauseStreams: false});
 var streamIndex = 0;
+var masterStream = new stream.PassThrough();
 
 var userCount = 0;
 var userIndex = 0;
@@ -40,52 +41,10 @@ var userIndex = 0;
 var messages = [];
 var messageIndex = 0;
 
-var masterStream = new stream.PassThrough();
-/*masterStream.on('data', function(data) {
+const client_id = 'aBCTLmQDtMoZnq70Drm67BWp3bKWcOgl';
 
-    streams.forEach(function(s) {
-
-        s.passThrough.push(data);
-
-    });
-
-});*/
-
-/*
-var links = ["https://www.youtube.com/watch?v=ABFno49CZIk", 
-            "https://www.youtube.com/watch?v=KxW0KjJGU_o",
-            "https://www.youtube.com/watch?v=ABFno49CZIk"];
-
-
-var master = CombinedStream.create({pauseStreams: false});
-
-var livePassThrough = new stream.PassThrough();
-
-
-//console.log(master);
-let rate = 160 * 125;
-master.pipe(new Throttle({rate: rate})).pipe(livePassThrough, {end: false});
-*/
 
 nextApp.prepare().then(() => {
-
-
-    app.get('/soundcloud', function (req, res) {
-
-        soundcloudr.setClientId('aBCTLmQDtMoZnq70Drm67BWp3bKWcOgl');
-
-        soundcloudr.getStreamUrl('https://soundcloud.com/lil-baby-4pf/drip-too-hard', function(err, url) {
-            if(err) {
-                return console.log(err.message);
-            }
-            // Do something with the stream url
-            console.log('My stream URL is: ' + url);
-        });
-
-
-        res.send(true);
-
-    });
 
     app.get('/skip', function (req, res) {
 
@@ -105,14 +64,6 @@ nextApp.prepare().then(() => {
             'Connection': 'keep-alive'
         });
 
-        let rate = 160 * 125;
-
-        /*masterStream.pipe(res).on('close', function() {
-
-            //removeStream(id);
-            console.log('closing response');
-        });*/
-
         let pt = new stream.PassThrough();
 
         masterStream.on('data', function(data) {
@@ -123,15 +74,13 @@ nextApp.prepare().then(() => {
 
         pt.pipe(res).on('close', function() {
 
-            //removeStream(id);
-            console.log('closing response');
+            console.log('closing stream response');
+
         });;
-
-
 
     });
 
-    app.get('/add', function (req, res) {
+    app.get('/add', async function (req, res) {
 
         let link = req.query.link;
 
@@ -139,29 +88,50 @@ nextApp.prepare().then(() => {
 
             try {
 
-                //check if link is youtube or soundcloud
+                if (link.includes("soundcloud")) {
 
-                ytdl.getInfo(link, (err, info) => {
+                    let url = `http://api.soundcloud.com/resolve.json?url=${link}/tracks&client_id=${client_id}`
 
-                    if (info) { 
-                        addToQueue(info);
-                    } else {
-                        console.log('invalid link: ',link);
-                    }
-                });
+                    axios.get(url).then(response => {
+
+                        addToQueueSC(response.data);
+
+                    }).catch(error => {
+                        
+                        console.log('invalid link: ',link, ', error: ',error);
+
+                    });
+
+                } else {
+
+                    ytdl.getInfo(link, (err, info) => {
+
+                        if (info) { 
+
+                            addToQueueYT(info);
+
+                        } else {
+
+                            console.log('invalid link: ',link);
+                        }
+
+                    });
+
+                }
+
+                res.send(true);
 
             } catch(error) {
                 console.error('caught getInfo error: ', error);
+                res.send(false);
 
             }
 
-            res.send(true);
         } else {
     
             res.send(false);
         }
     });
-
 
     app.get('*', (req, res) => {
         return handle(req, res);
@@ -238,8 +208,9 @@ const opt = {
       return format.container === opt.videoFormat && format.audioEncoding
     }
   }
+  
 
-function addToQueue(info) {
+function addToQueueYT(info) {
 
     let link = 'https://www.youtube.com/watch?v='+info.video_id;
 
@@ -332,7 +303,105 @@ function addToQueue(info) {
     songIndex++;
 }
 
-const secret = 'jradiosecret';
+function addToQueueSC(data) {
+
+    //duration
+    //title
+    //artwork_url
+    //stream_url
+
+    let streamLink = data.stream_url + "&client_id=" + client_id;
+
+    let song = {
+
+        id: songIndex,
+        raw: new stream.PassThrough(),
+        mainStream: new stream.PassThrough()
+
+    }
+
+    let audio = new stream.PassThrough();
+
+    request.get(streamLink).on('error', function(error) {
+
+        console.log('error getting sc stream: ', error);
+
+    }).pipe(audio);
+
+    //let size = parseInt(response.headers['content-length'], 10);
+    let seconds = Math.round(parseInt(data.duration, 10) / 1000);
+    let convertedSize = ((seconds * 160) / 8) * 1000;
+
+    console.log('size: ',data.original_content_size, ' duration: ',seconds);
+
+    song.videoId = data.id;
+    song.duration = seconds;
+    song.thumb = data.artwork_url;
+    song.elapsed = 0;
+    song.type = "idk";
+    song.title = data.title;
+    song.data = [];
+    song.downloaded = false;
+    song.rawData = [];
+    song.bps = 160 * 125; 
+    song.size = convertedSize;
+    song.skip = false;
+    song.destroy = false;
+
+    queue.push(song);
+
+    if (!currentSong) {
+    
+        nextSong();
+
+    }
+
+    let sockets = io.clients().sockets;
+    for (let socketId in sockets) {
+
+        let socket = sockets[socketId]; 
+        
+        //sendSong(socket);
+        sendSongs(socket);
+
+    }
+
+
+    let bufferStream = new stream.PassThrough();
+    let finalSize = 0;
+
+    bufferStream.on('data', function(data) {
+
+        if (!song.skip) {
+            song.mainStream.push(data);
+            finalSize += data.length;
+        } else {
+            audio.destroy();
+        }
+        //console.log('downloading: ', ((finalSize / song.size) * 100).toFixed(2) + '% ');
+
+    });
+
+    bufferStream.on('finish', function() {
+
+        song.downloaded = true;
+        console.log('finished downloading song: ',song.id,' final size: ', finalSize);
+        song.finalSize = finalSize;
+
+    });
+
+
+    const ffmpeg = new Ffmpeg(audio);
+
+    let mp3Stream = ffmpeg.format('mp3').withAudioBitrate(160);
+
+    mp3Stream.pipe(bufferStream);
+
+    songIndex++;
+
+}
+
+
 
 function sendSong(socket) {
 
@@ -406,8 +475,6 @@ function nextSong() {
             }
 
         });
-
-
 
         let sockets = io.clients().sockets;
 

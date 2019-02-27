@@ -29,6 +29,7 @@
     "react": "^16.8.1",
     "react-dom": "^16.8.1",
     "react-jss": "^8.6.1",
+    "request": "^2.88.0",
     "socket.io": "^2.2.0",
     "soundcloudr": "^1.1.0",
     "stream-throttle": "^0.1.3",

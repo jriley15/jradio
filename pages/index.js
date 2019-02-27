@@ -30,6 +30,7 @@ import Dot from '@material-ui/icons/FiberManualRecord';
 import Tabs from '@material-ui/core/Tabs';
 import Tab from '@material-ui/core/Tab';
 import Chat from './components/Chat';
+import Axios from 'axios';
 
 const styles = theme => ({
     root: {
@@ -284,7 +285,7 @@ class index extends Component {
 
     skipSong = () => {
 
-
+        Axios.get('/skip');
 
     };
 
@@ -361,9 +362,11 @@ class index extends Component {
                     {value === 1 && <Grid item xs={12}><Chat messages={this.state.messages} socket={this.socket}/></Grid> }
                     {value === 2 && <>
 
-                        <Button variant="contained" color="secondary" onClick={this.skipSong}>
-                            Skip Song
-                        </Button>
+                        <Grid item>
+                            <Button variant="contained" color="secondary" onClick={this.skipSong}>
+                                Skip Song
+                            </Button>
+                        </Grid>
 
                         {this.debugMode && debug.map((item) => (
 
