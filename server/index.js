@@ -15,8 +15,8 @@ const ffmpegInstaller = require('@ffmpeg-installer/ffmpeg');
 const Ffmpeg = require('fluent-ffmpeg');
 Ffmpeg.setFfmpegPath(ffmpegInstaller.path);
 const Throttle = require('stream-throttle').Throttle;
-//var CombinedStream = require('combined-stream');
-var youtubeStream = require('youtube-audio-stream')
+var soundcloudr = require('soundcloudr');
+
 //TESTING
 /*
 ytdl.getInfo('https://www.youtube.com/watch?v=6-hRrKFkAQE', (err, info) => {
@@ -69,6 +69,24 @@ master.pipe(new Throttle({rate: rate})).pipe(livePassThrough, {end: false});
 
 nextApp.prepare().then(() => {
 
+
+    app.get('/soundcloud', function (req, res) {
+
+        soundcloudr.setClientId('aBCTLmQDtMoZnq70Drm67BWp3bKWcOgl');
+
+        soundcloudr.getStreamUrl('https://soundcloud.com/lil-baby-4pf/drip-too-hard', function(err, url) {
+            if(err) {
+                return console.log(err.message);
+            }
+            // Do something with the stream url
+            console.log('My stream URL is: ' + url);
+        });
+
+
+        res.send(true);
+
+    });
+
     app.get('/skip', function (req, res) {
 
         if (currentSong) {
@@ -120,6 +138,9 @@ nextApp.prepare().then(() => {
         if (link) {
 
             try {
+
+                //check if link is youtube or soundcloud
+
                 ytdl.getInfo(link, (err, info) => {
 
                     if (info) { 
@@ -128,6 +149,7 @@ nextApp.prepare().then(() => {
                         console.log('invalid link: ',link);
                     }
                 });
+
             } catch(error) {
                 console.error('caught getInfo error: ', error);
 
@@ -203,20 +225,6 @@ function addStream(newStream) {
     streamIndex++;
 
     return s.id;
-
-}
-
-function queueElapsed() {
-
-    let totalElapsedTime = 0;
-    
-    queue.forEach(function(song) {
-
-        totalElapsedTime += (song.duration - elapsed);
-
-    });
-
-    return totalElapsedTime;
 
 }
 
