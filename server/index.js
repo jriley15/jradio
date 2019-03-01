@@ -15,9 +15,12 @@ const ffmpegInstaller = require('@ffmpeg-installer/ffmpeg');
 const Ffmpeg = require('fluent-ffmpeg');
 Ffmpeg.setFfmpegPath(ffmpegInstaller.path);
 const Throttle = require('stream-throttle').Throttle;
-var soundcloudr = require('soundcloudr');
+const ThrottleGroup = require('stream-throttle').ThrottleGroup;
+var tg = new ThrottleGroup({rate: 125 * 160});
 const axios = require('axios');
 var request = require('request');
+//const ytdlDiscord = require('ytdl-core-discord');
+
 //TESTING
 /*
 ytdl.getInfo('https://www.youtube.com/watch?v=6-hRrKFkAQE', (err, info) => {
@@ -64,15 +67,16 @@ nextApp.prepare().then(() => {
             'Connection': 'keep-alive'
         });
 
-        let pt = new stream.PassThrough();
+        /*let pt = new stream.PassThrough();
 
         masterStream.on('data', function(data) {
 
             pt.push(data);
 
-        });
+        });*/
 
-        pt.pipe(res).on('close', function() {
+        //pt.pipe(res).on('close', function() {
+        masterStream.pipe(res).on('close', function() { 
 
             console.log('closing stream response');
 
@@ -213,16 +217,49 @@ const opt = {
 function addToQueueYT(info) {
 
     let link = 'https://www.youtube.com/watch?v='+info.video_id;
+    let seconds = parseInt(info.length_seconds, 10);
+    let convertedSize = ((seconds * 160) / 8) * 1000;
 
     let song = {
 
         id: songIndex,
-        raw: new stream.PassThrough(),
-        mainStream: new stream.PassThrough()
+        mainStream: new stream.PassThrough(),
+        videoId: info.video_id,
+        duration: info.length_seconds,
+        thumb: info.thumbnail_url,
+        elapsed: 0,
+        type: '?',
+        title: info.title,
+        data: [],
+        downloaded: false,
+        rawData: [],
+        bps: 160 * 125, 
+        size: convertedSize,
+        skip: false,
+        destroy: false,
+        from: 'yt',
+        link: link
+    }
+
+    queue.push(song);
+
+    if (!currentSong) {
+    
+        nextSong();
 
     }
 
-    const audio = ytdl(link, opt).on('response', function(response) { 
+    let sockets = io.clients().sockets;
+    for (let socketId in sockets) {
+
+        let socket = sockets[socketId]; 
+        
+        //sendSong(socket);
+        sendSongs(socket);
+
+    }
+
+    /*const audio = ytdl(link, opt).on('response', function(response) { 
       
         let size = parseInt(response.headers['content-length'], 10);
         let type = response.headers['content-type'];
@@ -231,84 +268,15 @@ function addToQueueYT(info) {
 
         console.log('format: ', type,' - size: ',convertedSize, ' duration: ',info.length_seconds);
 
-        let format = ytdl.chooseFormat(info.formats, {filter: 'audioonly', quality: 'highest'}); 
+        //let format = ytdl.chooseFormat(info.formats, {filter: 'audioonly', quality: 'highest'}); 
 
-        song.videoId = info.video_id;
-        song.duration = info.length_seconds;
-        song.thumb = info.thumbnail_url;
-        song.elapsed = 0;
-        song.type = type;
-        song.title = info.title;
-        song.data = [];
-        song.downloaded = false;
-        song.rawData = [];
-        song.bps = 160 * 125; 
-        song.size = convertedSize;
-        song.skip = false;
-        song.destroy = false;
-
-        queue.push(song);
-
-        if (!currentSong) {
-        
-            nextSong();
-
-        }
-
-        let sockets = io.clients().sockets;
-        for (let socketId in sockets) {
-
-            let socket = sockets[socketId]; 
-            
-            //sendSong(socket);
-            sendSongs(socket);
-
-        }
-
-  
-    });
-
-    let bufferStream = new stream.PassThrough();
-    let finalSize = 0;
-
-    bufferStream.on('data', function(data) {
-
-        if (!song.skip) {
-            song.mainStream.push(data);
-            finalSize += data.length;
-        } else {
-            audio.destroy();
-        }
-        //console.log('downloading: ', ((finalSize / song.size) * 100).toFixed(2) + '% ');
-
-    });
-
-    bufferStream.on('finish', function() {
-
-        song.downloaded = true;
-        console.log('finished downloading song: ',song.id,' final size: ', finalSize);
-        song.finalSize = finalSize;
-
-    });
-
-
-    const ffmpeg = new Ffmpeg(audio);
-
-    let mp3Stream = ffmpeg.format('mp3').withAudioBitrate(160);
-
-    mp3Stream.pipe(bufferStream);
-
-    //masterStream.append(bufferStream);
+    });*/
     
+
     songIndex++;
 }
 
 function addToQueueSC(data) {
-
-    //duration
-    //title
-    //artwork_url
-    //stream_url
 
     let streamLink = data.stream_url + "&client_id=" + client_id;
 
@@ -446,45 +414,127 @@ function nextSong() {
     if (queue.length > 0) {
 
         let song = queue.shift();
-        let tempStream = new stream.PassThrough();
-        let dataSize = 0;
-        let rate = 125 * 160;
 
-        song.mainStream.pipe(new Throttle({rate: rate})).pipe(tempStream).pipe(masterStream);
 
-        song.started = Date.now();
+        if (song.from === 'yt') {
 
-        currentSong = song;
+            let bufferStream = new stream.PassThrough();
+            let finalSize = 0;
 
-        tempStream.on('data', function(data) {
+            const audio = ytdl(song.link, opt);
+        
+            bufferStream.on('data', function(data) {
+        
+        
+                if (!song.skip) {
+                    song.mainStream.push(data);
+                    finalSize += data.length;
+                } else {
+                    audio.destroy();
+                    song.mainStream.destroy();
+                }
+                console.log('downloading: ', ((finalSize / song.size) * 100).toFixed(2) + '% ');
+        
+            });
+        
+            bufferStream.on('finish', function() {
+        
+                song.downloaded = true;
+                console.log('finished downloading song: ',song.id,' final size: ', finalSize);
+                song.finalSize = finalSize;
+                audio.destroy();
+                //song.mainStream.destroy();
+        
+            });
+        
+            const ffmpeg = new Ffmpeg(audio);
+            ffmpeg.format('mp3').withAudioBitrate(160).pipe(bufferStream);
 
-            //masterStream.push(data);
-            dataSize += data.length;
+            
+            let tempStream = new stream.PassThrough();
+            let dataSize = 0;
 
-            //console.log(dataSize);
-            if (dataSize >= song.finalSize || song.skip) {
+            song.mainStream.pipe(tg.throttle()).pipe(tempStream).pipe(masterStream);
+
+            song.started = Date.now();
+
+            currentSong = song;
+
+            tempStream.on('data', function(data) {
+
+                //masterStream.push(data);
+                dataSize += data.length;
+
+                //console.log(dataSize);
+                if (dataSize >= song.finalSize || song.skip) {
+                    
+                    tempStream.unpipe(masterStream);
+                    song.mainStream.end();
+
+
+                    console.log('done sending throttled data');
+                    //delay to account for buffering
+
+                    nextSong();
+                }
+
+            });
+
+            let sockets = io.clients().sockets;
+
+            for (let socketId in sockets) {
+
+                let socket = sockets[socketId]; 
                 
-                tempStream.unpipe(masterStream);
-                song.mainStream.end();
+                sendSong(socket);
+                sendSongs(socket);
 
-
-                console.log('done sending throttled data');
-                //delay to account for buffering
-
-                nextSong();
             }
 
-        });
 
-        let sockets = io.clients().sockets;
+        } else {
 
-        for (let socketId in sockets) {
+        
 
-            let socket = sockets[socketId]; 
-            
-            sendSong(socket);
-            sendSongs(socket);
+            let tempStream = new stream.PassThrough();
+            let dataSize = 0;
 
+            song.mainStream.pipe(tg.throttle()).pipe(tempStream).pipe(masterStream);
+
+            song.started = Date.now();
+
+            currentSong = song;
+
+            tempStream.on('data', function(data) {
+
+                //masterStream.push(data);
+                dataSize += data.length;
+
+                //console.log(dataSize);
+                if (dataSize >= song.finalSize || song.skip) {
+                    
+                    tempStream.unpipe(masterStream);
+                    song.mainStream.end();
+
+
+                    console.log('done sending throttled data');
+                    //delay to account for buffering
+
+                    nextSong();
+                }
+
+            });
+
+            let sockets = io.clients().sockets;
+
+            for (let socketId in sockets) {
+
+                let socket = sockets[socketId]; 
+                
+                sendSong(socket);
+                sendSongs(socket);
+
+            }
         }
 
     } else {
