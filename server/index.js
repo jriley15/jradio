@@ -19,6 +19,7 @@ const ThrottleGroup = require('stream-throttle').ThrottleGroup;
 var tg = new ThrottleGroup({rate: 125 * 160});
 const axios = require('axios');
 var request = require('request');
+var devnull = require('dev-null');
 //const ytdlDiscord = require('ytdl-core-discord');
 
 //TESTING
@@ -80,7 +81,7 @@ nextApp.prepare().then(() => {
 
             console.log('closing stream response');
 
-        });;
+        });
 
     });
 
@@ -448,13 +449,13 @@ function nextSong() {
             });
         
             const ffmpeg = new Ffmpeg(audio);
-            ffmpeg.format('mp3').withAudioBitrate(160).pipe(bufferStream);
+            ffmpeg.format('mp3').withAudioBitrate(160).pipe(bufferStream).pipe(devnull());
 
             
             let tempStream = new stream.PassThrough();
             let dataSize = 0;
 
-            song.mainStream.pipe(tg.throttle()).pipe(tempStream).pipe(masterStream);
+            song.mainStream.pipe(tg.throttle()).pipe(tempStream).pipe(masterStream).pipe(devnull());
 
             song.started = Date.now();
 
