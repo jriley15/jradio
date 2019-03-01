@@ -431,8 +431,8 @@ function nextSong() {
                     song.mainStream.push(data);
                     finalSize += data.length;
                 } else {
-                    audio.destroy();
-                    song.mainStream.destroy();
+                    audio.end();
+                    song.mainStream.end();
                 }
                 //console.log('downloading: ', ((finalSize / song.size) * 100).toFixed(2) + '% ');
         
@@ -443,8 +443,7 @@ function nextSong() {
                 song.downloaded = true;
                 console.log('finished downloading song: ',song.id,' final size: ', finalSize);
                 song.finalSize = finalSize;
-                audio.destroy();
-                //song.mainStream.destroy();
+                audio.end();
         
             });
         
@@ -471,7 +470,6 @@ function nextSong() {
                     
                     tempStream.unpipe(masterStream);
                     song.mainStream.end();
-
 
                     console.log('done sending throttled data');
                     //delay to account for buffering
