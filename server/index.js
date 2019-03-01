@@ -433,7 +433,7 @@ function nextSong() {
                     audio.destroy();
                     song.mainStream.destroy();
                 }
-                console.log('downloading: ', ((finalSize / song.size) * 100).toFixed(2) + '% ');
+                //console.log('downloading: ', ((finalSize / song.size) * 100).toFixed(2) + '% ');
         
             });
         
