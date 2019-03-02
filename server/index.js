@@ -485,7 +485,11 @@ function nextSong() {
         
         
                 if (!song.skip) {
+
+                    //write directly to master for first chunk?
+
                     song.mainStream.push(data);
+
                     finalSize += data.length;
                 } else {      
                     audio.end();
@@ -529,9 +533,14 @@ function nextSong() {
 
                 //console.log(dataSize);
                 if (dataSize >= song.finalSize || song.skip) {
-                    
+
                     throttle.unpipe(tempStream);
                     song.mainStream.end();
+
+                    /*if (song.skip) {
+                        tempStream.unpipe(masterStream);
+                        tempStream.end();
+                    }*/
 
                     console.log('done sending throttled data');
                     //delay to account for buffering
