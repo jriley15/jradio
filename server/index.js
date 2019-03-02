@@ -102,6 +102,13 @@ masterStream.on('data', function(data) {
 
 });
 
+function clearBuffer() {
+
+    bufferData = [];
+    bufferSize = 0;
+
+}
+
 
 nextApp.prepare().then(() => {
 
@@ -480,10 +487,11 @@ function nextSong() {
                 if (!song.skip) {
                     song.mainStream.push(data);
                     finalSize += data.length;
-                } else {
-                    bufferStream.removeAllListeners();
+                } else {      
                     audio.end();
                     song.mainStream.end();
+
+                    clearBuffer();
 
                 }
                 //console.log('downloading: ', ((finalSize / song.size) * 100).toFixed(2) + '% ');
@@ -497,7 +505,6 @@ function nextSong() {
                 song.finalSize = finalSize;
                 audio.end();
                 //tempStream.unpipe(masterStream);
-                bufferStream.removeAllListeners();
         
             });
         
@@ -507,8 +514,9 @@ function nextSong() {
             
             let tempStream = new stream.PassThrough();
             let dataSize = 0;
+            let throttle = new Throttle({rate: bps});
 
-            song.mainStream.pipe(new Throttle({rate: bps})).pipe(tempStream).pipe(masterStream).pipe(devnull());
+            song.mainStream.pipe(throttle).pipe(tempStream).pipe(masterStream).pipe(devnull());
 
             song.started = Date.now();
 
@@ -522,12 +530,13 @@ function nextSong() {
                 //console.log(dataSize);
                 if (dataSize >= song.finalSize || song.skip) {
                     
-                    tempStream.unpipe(masterStream);
+                    throttle.unpipe(tempStream);
                     song.mainStream.end();
-                    tempStream.removeAllListeners();
 
                     console.log('done sending throttled data');
                     //delay to account for buffering
+
+                    clearBuffer();
 
                     nextSong();
                 }
