@@ -15,21 +15,11 @@ const ffmpegInstaller = require('@ffmpeg-installer/ffmpeg');
 const Ffmpeg = require('fluent-ffmpeg');
 Ffmpeg.setFfmpegPath(ffmpegInstaller.path);
 const Throttle = require('stream-throttle').Throttle;
-const ThrottleGroup = require('stream-throttle').ThrottleGroup;
-var tg = new ThrottleGroup({rate: 125 * 160});
 const axios = require('axios');
 var request = require('request');
 var devnull = require('dev-null');
 //const ytdlDiscord = require('ytdl-core-discord');
-
-//TESTING
-/*
-ytdl.getInfo('https://www.youtube.com/watch?v=6-hRrKFkAQE', (err, info) => {
-
-    addToQueue(info);
-
-});
-*/
+require('events').EventEmitter.defaultMaxListeners = 100;
 
 // queue of songs
 var queue = [];
@@ -39,13 +29,78 @@ var streams = [];
 var streamIndex = 0;
 var masterStream = new stream.PassThrough();
 
+var bufferData = [];
+var bufferSize = 0;
+
 var userCount = 0;
 var userIndex = 0;
 
 var messages = [];
 var messageIndex = 0;
 
+//soundcloud client_id, may not last forever?
 const client_id = 'aBCTLmQDtMoZnq70Drm67BWp3bKWcOgl';
+
+//bit rate of stream output
+const bitRate = 128;
+
+//bytes per second for throttle
+const bps = bitRate * 125;
+
+//how many seconds of buffer to keep for starting off new streams
+const secondsToBuffer = 5;
+
+//size of buffer in bytes to keep stored
+const maxBufferSize = secondsToBuffer * bps;
+
+console.log('max buffer:', maxBufferSize);
+
+const preferredAudioFormat = 'aac';
+
+//options passed to ytdl for selecting audio format
+const opt = {
+    //videoFormat: 'mp4',
+    //quality: 'lowest',
+    //audioFormat: 'mp3',
+    filter (format) {
+      return format.audioEncoding === preferredAudioFormat && format.audioBitrate === 128;
+    }
+}
+
+//TESTING
+/*
+ytdl.getInfo('https://www.youtube.com/watch?v=6-hRrKFkAQE', (err, info) => {
+
+    addToQueueYT(info);
+
+});
+*/
+
+masterStream.on('data', function(data) {
+
+    if ((bufferSize + data.length) < maxBufferSize) {
+
+        //push chunk to end of buffer
+        bufferData.push(data);
+
+        //increment buffer size
+        bufferSize += data.length;
+
+    } else {
+
+        //remove front chunk from buffer
+        let deletedData = bufferData.splice(0, 1)[0];
+
+        bufferSize -= deletedData.length;
+
+        //push chunk to end of buffer
+        bufferData.push(data);
+
+        bufferSize += data.length;
+
+    }
+
+});
 
 
 nextApp.prepare().then(() => {
@@ -68,20 +123,24 @@ nextApp.prepare().then(() => {
             'Connection': 'keep-alive'
         });
 
-        /*let pt = new stream.PassThrough();
 
-        masterStream.on('data', function(data) {
+        if (currentSong) {
 
-            pt.push(data);
+            bufferData.forEach(function (data) {
 
-        });*/
+                res.write(data);
 
-        //pt.pipe(res).on('close', function() {
+            });
+
+        }
+
         masterStream.pipe(res).on('close', function() { 
 
             console.log('closing stream response');
+            //masterStream.removeListener('data', func);
 
         });
+
 
     });
 
@@ -205,16 +264,7 @@ function addStream(newStream) {
 
 var songIndex = 0;
 
-const opt = {
-    videoFormat: 'mp4',
-    quality: 'lowest',
-    audioFormat: 'mp3',
-    filter (format) {
-      return format.container === opt.videoFormat && format.audioEncoding
-    }
-  }
   
-
 function addToQueueYT(info) {
 
     let link = 'https://www.youtube.com/watch?v='+info.video_id;
@@ -234,7 +284,7 @@ function addToQueueYT(info) {
         data: [],
         downloaded: false,
         rawData: [],
-        bps: 160 * 125, 
+        bps: bps, 
         size: convertedSize,
         skip: false,
         destroy: false,
@@ -312,7 +362,7 @@ function addToQueueSC(data) {
     song.data = [];
     song.downloaded = false;
     song.rawData = [];
-    song.bps = 160 * 125; 
+    song.bps = bps; 
     song.size = convertedSize;
     song.skip = false;
     song.destroy = false;
@@ -345,7 +395,7 @@ function addToQueueSC(data) {
             song.mainStream.push(data);
             finalSize += data.length;
         } else {
-            audio.destroy();
+            audio.end();
         }
         //console.log('downloading: ', ((finalSize / song.size) * 100).toFixed(2) + '% ');
 
@@ -362,7 +412,7 @@ function addToQueueSC(data) {
 
     const ffmpeg = new Ffmpeg(audio);
 
-    let mp3Stream = ffmpeg.format('mp3').withAudioBitrate(160);
+    let mp3Stream = ffmpeg.format('mp3').withAudioBitrate(bitRate);
 
     mp3Stream.pipe(bufferStream);
 
@@ -431,8 +481,10 @@ function nextSong() {
                     song.mainStream.push(data);
                     finalSize += data.length;
                 } else {
+                    bufferStream.removeAllListeners();
                     audio.end();
                     song.mainStream.end();
+
                 }
                 //console.log('downloading: ', ((finalSize / song.size) * 100).toFixed(2) + '% ');
         
@@ -444,17 +496,19 @@ function nextSong() {
                 console.log('finished downloading song: ',song.id,' final size: ', finalSize);
                 song.finalSize = finalSize;
                 audio.end();
+                //tempStream.unpipe(masterStream);
+                bufferStream.removeAllListeners();
         
             });
         
             const ffmpeg = new Ffmpeg(audio);
-            ffmpeg.format('mp3').withAudioBitrate(160).pipe(bufferStream).pipe(devnull());
+            ffmpeg.format('mp3').withAudioBitrate(bitRate).pipe(bufferStream).pipe(devnull());
 
             
             let tempStream = new stream.PassThrough();
             let dataSize = 0;
 
-            song.mainStream.pipe(tg.throttle()).pipe(tempStream).pipe(masterStream).pipe(devnull());
+            song.mainStream.pipe(new Throttle({rate: bps})).pipe(tempStream).pipe(masterStream).pipe(devnull());
 
             song.started = Date.now();
 
@@ -470,6 +524,7 @@ function nextSong() {
                     
                     tempStream.unpipe(masterStream);
                     song.mainStream.end();
+                    tempStream.removeAllListeners();
 
                     console.log('done sending throttled data');
                     //delay to account for buffering
@@ -498,7 +553,7 @@ function nextSong() {
             let tempStream = new stream.PassThrough();
             let dataSize = 0;
 
-            song.mainStream.pipe(tg.throttle()).pipe(tempStream).pipe(masterStream);
+            song.mainStream.pipe(new Throttle({rate: bps})).pipe(tempStream).pipe(masterStream);
 
             song.started = Date.now();
 
