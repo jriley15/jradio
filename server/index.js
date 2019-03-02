@@ -12,14 +12,15 @@ const io = require('socket.io')(server);
 const stream = require('stream');
 var jwt = require('jsonwebtoken');
 const ffmpegInstaller = require('@ffmpeg-installer/ffmpeg');
-const Ffmpeg = require('fluent-ffmpeg');
-Ffmpeg.setFfmpegPath(ffmpegInstaller.path);
+const ffmpeg = require('fluent-ffmpeg');
+ffmpeg.setFfmpegPath(ffmpegInstaller.path);
 const Throttle = require('stream-throttle').Throttle;
 const axios = require('axios');
 var request = require('request');
 var devnull = require('dev-null');
 //const ytdlDiscord = require('ytdl-core-discord');
 require('events').EventEmitter.defaultMaxListeners = 100;
+const { PerformanceObserver, performance } = require('perf_hooks');
 
 // queue of songs
 var queue = [];
@@ -53,10 +54,8 @@ const secondsToBuffer = 5;
 //size of buffer in bytes to keep stored
 const maxBufferSize = secondsToBuffer * bps;
 
-console.log('max buffer:', maxBufferSize);
-
 const preferredAudioFormat = 'aac';
-
+let found = false;
 //options passed to ytdl for selecting audio format
 const opt = {
     //videoFormat: 'mp4',
@@ -70,11 +69,14 @@ const opt = {
 //TESTING
 /*
 ytdl.getInfo('https://www.youtube.com/watch?v=6-hRrKFkAQE', (err, info) => {
+    let format = ytdl.chooseFormat(info.formats, opt);
 
+    console.log(format);
+    
     addToQueueYT(info);
+    //addToQueueYT(info);
+});*/
 
-});
-*/
 
 masterStream.on('data', function(data) {
 
@@ -99,6 +101,8 @@ masterStream.on('data', function(data) {
         bufferSize += data.length;
 
     }
+
+   // console.log('master chunk: ',data.length);
 
 });
 
@@ -417,7 +421,7 @@ function addToQueueSC(data) {
     });
 
 
-    const ffmpeg = new Ffmpeg(audio);
+    const ffmpeg = new ffmpeg(audio);
 
     let mp3Stream = ffmpeg.format('mp3').withAudioBitrate(bitRate);
 
@@ -478,20 +482,32 @@ function nextSong() {
 
             let bufferStream = new stream.PassThrough();
             let finalSize = 0;
+            let start = performance.now();
 
             const audio = ytdl(song.link, opt);
-        
+
+            //audio.pipe(bufferStream).pipe(devnull());
+
+            const encoder = ffmpeg().input(audio);
+
+            //only live audio format that's compatible with all browsers
+            encoder.format('mp3').withAudioBitrate(bitRate).pipe(bufferStream).pipe(devnull());
+
             bufferStream.on('data', function(data) {
-        
-        
+                
                 if (!song.skip) {
 
-                    //write directly to master for first chunk?
+                    //send first 2 seconds of data immediately to users so there's less of a delay between songs
 
-                    song.mainStream.push(data);
-
+                    if (finalSize <= (bps * 2)) {
+                        tempStream.write(data);
+                    } else {
+                        song.mainStream.push(data);
+                    }
+                    
                     finalSize += data.length;
-                } else {      
+
+                } else {    
                     audio.end();
                     song.mainStream.end();
 
@@ -511,10 +527,6 @@ function nextSong() {
                 //tempStream.unpipe(masterStream);
         
             });
-        
-            const ffmpeg = new Ffmpeg(audio);
-            ffmpeg.format('mp3').withAudioBitrate(bitRate).pipe(bufferStream).pipe(devnull());
-
             
             let tempStream = new stream.PassThrough();
             let dataSize = 0;
@@ -522,12 +534,29 @@ function nextSong() {
 
             song.mainStream.pipe(throttle).pipe(tempStream).pipe(masterStream).pipe(devnull());
 
-            song.started = Date.now();
+            let first = true;
 
             currentSong = song;
 
             tempStream.on('data', function(data) {
 
+                if (first) {
+                    console.log('ytdl took: ',(performance.now() - start),' ms to start');
+                    song.started = Date.now();
+                    first = false;
+
+                    let sockets = io.clients().sockets;
+
+                    for (let socketId in sockets) {
+        
+                        let socket = sockets[socketId]; 
+                        
+                        sendSong(socket);
+                        sendSongs(socket);
+        
+                    }
+
+                }
                 //masterStream.push(data);
                 dataSize += data.length;
 
@@ -537,10 +566,10 @@ function nextSong() {
                     throttle.unpipe(tempStream);
                     song.mainStream.end();
 
-                    /*if (song.skip) {
+                    if (song.skip) {
                         tempStream.unpipe(masterStream);
                         tempStream.end();
-                    }*/
+                    }
 
                     console.log('done sending throttled data');
                     //delay to account for buffering
@@ -552,21 +581,9 @@ function nextSong() {
 
             });
 
-            let sockets = io.clients().sockets;
-
-            for (let socketId in sockets) {
-
-                let socket = sockets[socketId]; 
-                
-                sendSong(socket);
-                sendSongs(socket);
-
-            }
 
 
         } else {
-
-        
 
             let tempStream = new stream.PassThrough();
             let dataSize = 0;

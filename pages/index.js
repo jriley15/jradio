@@ -116,6 +116,8 @@ class index extends Component {
         this.debugMode = false;
 
         this.socket = io();
+
+        this.timeOffset = 0;
     }
 
     componentDidMount() {
@@ -125,15 +127,11 @@ class index extends Component {
         this.socket.on('song', (data) => {
 
             this.totalOffset = this.player.currentTime;
-            
-            console.log(this.totalOffset);
-            console.log(this.player.currentTime);
-            console.log(data.started);
 
             console.log('new song: ',data);
 
             let song = data;
-            song.timeOffset = 0;
+            this.timeOffset = 0;
             song.firstPlay = true;
             
             if (this.state.interacted && (this.state.waiting || !this.state.playing)) {
@@ -144,7 +142,8 @@ class index extends Component {
 
             } else {
 
-                song.timeOffset = (Date.now() - new Date(song.started)) / 1000;
+                this.timeOffset = (Date.now() - new Date(song.started)) / 1000;
+            
 
             }
 
@@ -190,8 +189,7 @@ class index extends Component {
             
             if (this.state.currentSong) {
 
-                this.setState({progress: ((parseInt(this.player.currentTime - this.totalOffset, 10) + this.state.currentSong.timeOffset) / this.state.currentSong.duration) * 100});
-                //console.log(this.state.currentSong.timeOffset);
+                this.setState({progress: ((parseInt(this.player.currentTime - this.totalOffset, 10) + this.timeOffset) / this.state.currentSong.duration) * 100});
             }
 
         }, 500);
@@ -203,7 +201,7 @@ class index extends Component {
 
     handleScroll = (event) => {
 
-        console.log(document.documentElement.scrollTop);
+        //console.log(document.documentElement.scrollTop);
 
         if (document.documentElement.scrollTop >= 56) {
             this.setState({fixedTabs: true});
@@ -310,8 +308,8 @@ class index extends Component {
 
                 <Grid container className={classes.container} direction="column" onClick={() => this.setState({volumeToggle: false})} style={{paddingTop: (fixedTabs ? 48 : 8)}}>
 
-                    <audio controls id="player" hidden>
-                        <source id="source" type="audio/mpeg" src="/stream"/>
+                    <audio id="player" hidden>
+                        <source id="source" type="audio/mp4" src="/stream"/>
                         Your browser does not support the audio element.
                     </audio>
                     
@@ -440,10 +438,12 @@ class index extends Component {
     }
 
     formatTime(sec) {
-        var hrs = Math.floor(sec / 3600);
-        var min = Math.floor((sec - (hrs * 3600)) / 60);
-        var seconds = sec - (hrs * 3600) - (min * 60);
+        let hrs = Math.floor(sec / 3600);
+        let min = Math.floor((sec - (hrs * 3600)) / 60);
+        let seconds = sec - (hrs * 3600) - (min * 60);
         seconds = Math.round(seconds * 100) / 100
+
+        console.log('formatting: ',sec);
        
         var result = '';
 
@@ -462,9 +462,15 @@ class index extends Component {
 
         if (currentSong) {
 
+            let time = (this.player.currentTime - this.totalOffset);
+            if (time < 0) {
+                this.totalOffset = 0;
+                time = 0;
+            }
+
             return (
                 <>
-                    <Typography inline variant="overline" className={classes.live}><Dot className={classes.liveDot}/>LIVE</Typography>{this.formatTime(Math.round((this.player.currentTime - this.totalOffset) + currentSong.timeOffset))} / {this.formatTime(currentSong.duration)}
+                    <Typography inline variant="overline" className={classes.live}><Dot className={classes.liveDot}/>LIVE</Typography>{this.formatTime(Math.round(time + this.timeOffset))} / {this.formatTime(currentSong.duration)}
                 </>
             );
         } else {
@@ -549,10 +555,11 @@ class index extends Component {
 
             if (this.state.currentSong.firstPlay) {
 
-                let offset = (Date.now() - new Date(this.state.currentSong.started)) / 1000;
+                this.offset = (Date.now() - new Date(this.state.currentSong.started)) / 1000;
 
-                console.log('playing - setting offset to ',offset);
-                this.setState({playing: true, waiting: false, currentSong: {...this.state.currentSong, firstPlay: false, timeOffset: offset}});
+                //console.log('playing - setting offset to ',this.offset);
+                this.setState({playing: true, waiting: false, currentSong: {...this.state.currentSong, firstPlay: false}});
+                
 
 
             } else {
@@ -577,10 +584,27 @@ class index extends Component {
         this.player.onabort = function() {
             me.debug('onabort');
         }
-        this.player.onerror = function() {
-            me.debug('onerror: ',me.player.onerror.code);
+        this.player.addEventListener('error', (e) => {
+
+            switch (e.target.error.code) {
+                case e.target.error.MEDIA_ERR_ABORTED:
+                me.debug('You aborted the video playback.');
+                  break;
+                case e.target.error.MEDIA_ERR_NETWORK:
+                me.debug('A network error caused the audio download to fail.');
+                  break;
+                case e.target.error.MEDIA_ERR_DECODE:
+                me.debug('The audio playback was aborted due to a corruption problem or because the video used features your browser did not support.');
+                  break;
+                case e.target.error.MEDIA_ERR_SRC_NOT_SUPPORTED:
+                me.debug('The video audio not be loaded, either because the server or network failed or because the format is not supported.');
+                  break;
+                default:
+                me.debug('An unknown error occurred.');
+                  break;
+              }
             
-        }
+        });
         this.player.oncanplaythrough = () => {
             me.debug('oncanplaythrough');
             this.setState({waiting: false});
