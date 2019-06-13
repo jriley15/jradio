@@ -77,7 +77,6 @@ ytdl.getInfo('https://www.youtube.com/watch?v=6-hRrKFkAQE', (err, info) => {
     //addToQueueYT(info);
 });*/
 
-
 masterStream.on('data', function(data) {
 
     if ((bufferSize + data.length) < maxBufferSize) {
@@ -112,7 +111,6 @@ function clearBuffer() {
     bufferSize = 0;
 
 }
-
 
 nextApp.prepare().then(() => {
 
@@ -151,7 +149,6 @@ nextApp.prepare().then(() => {
             //masterStream.removeListener('data', func);
 
         });
-
 
     });
 
@@ -245,8 +242,6 @@ nextApp.prepare().then(() => {
         });
     
     });
-
-
 
     server.listen(PORT, function() {
         console.log('HTTP server listening on port '+PORT);
@@ -431,8 +426,6 @@ function addToQueueSC(data) {
 
 }
 
-
-
 function sendSong(socket) {
 
     if (currentSong) {
@@ -580,8 +573,6 @@ function nextSong() {
                 }
 
             });
-
-
 
         } else {
 
