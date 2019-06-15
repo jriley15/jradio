@@ -75,6 +75,15 @@ const styles = theme => ({
     },
     volumePad: {
         padding: (theme.spacing.unit * 4.375) /2
+    },
+
+    thumb: {
+        maxWidth: '150px',
+
+        [theme.breakpoints.up('sm')]: {
+            maxWidth: '200px',
+        },
+
     }
 
 
@@ -336,7 +345,7 @@ class index extends Component {
                                                 </TableCell>
                                                 <TableCell align="center" direction="column">
                                                     <Grid item>
-                                                        <img src={song.thumb} />
+                                                        <img src={song.thumb}  className={classes.thumb}/>
                                                     </Grid>
                                                     <Grid item>
                                                         {this.formatTime(song.duration)}

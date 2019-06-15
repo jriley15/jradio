@@ -283,7 +283,7 @@ function addToQueueYT(info) {
         mainStream: new stream.PassThrough(),
         videoId: info.video_id,
         duration: info.length_seconds,
-        thumb: info.thumbnail_url,
+        thumb: 'https://img.youtube.com/vi/'+info.video_id+'/hqdefault.jpg',//info.thumbnail_url,
         elapsed: 0,
         type: '?',
         title: info.title,
