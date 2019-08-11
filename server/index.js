@@ -361,9 +361,9 @@ function addToQueueSC(data) {
     song.finalSize = finalSize;
   });
 
-  const ffmpeg = new ffmpeg(audio);
+  const ffm = new ffmpeg(audio);
 
-  let mp3Stream = ffmpeg.format("mp3").withAudioBitrate(bitRate);
+  let mp3Stream = ffm.format("mp3").withAudioBitrate(bitRate);
 
   mp3Stream.pipe(bufferStream);
 
