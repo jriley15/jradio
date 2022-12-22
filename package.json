@@ -20,7 +20,7 @@
     "dev-null": "^0.1.1",
     "express": "^4.16.4",
     "fluent-ffmpeg": "^2.1.2",
-    "jsonwebtoken": "^8.4.0",
+    "jsonwebtoken": "^9.0.0",
     "jss": "^9.8.7",
     "jwt-decode": "^2.2.0",
     "next": "^7.0.3",
